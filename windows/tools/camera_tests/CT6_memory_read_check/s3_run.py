@@ -34,8 +34,8 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "c6f3601cd90b775a11c511aba79405f0896c2edd97ae3be332023b8c85687d79"),
-        "dump": ("libJit_s3_dump.so", "a8dfaa301a31b84eaf67d7355838b59cd73fb9dbe3e2b9004855e43fca327573")}
+PINS = {"check": ("libJit_s3_check.so", "b4a05b3ae203d2ba9989bc5dd4c0bf4952d54459601ecf62e1a954af12fc3346"),
+        "dump": ("libJit_s3_dump.so", "94665d399b40ad812a5f1bcd02a655e36e74a637b91f343bdae7c3034b9b6398")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
@@ -182,7 +182,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v1 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v2 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:

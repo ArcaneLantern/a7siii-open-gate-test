@@ -246,7 +246,7 @@ static const unsigned char B240[] = {112,8};
 static const unsigned char B241[] = {0,10};
 static const unsigned char B242[] = {112,8,0,0};
 static const unsigned char B243[] = {0,10,0,0};
-#define S3_LABEL "s3read_v1"
+#define S3_LABEL "s3read_v2"
 #define CP_LO 0xc0000U
 #define CP_HI 0x2100000U
 #define AVCAM_PHYS 0x401000000UL
@@ -398,11 +398,11 @@ static const struct mp_site av_sites[] = {
     {0x3ae930UL, 4, B242, B243},
 };
 static const struct av_guard av_guards[] = {
-    {"head", 0x0UL, 4096, {8,105,121,236,249,111,223,16,3,173,103,75,220,203,208,179,245,176,181,198,178,91,24,168,65,59,32,55,25,13,46,55}},
     {"unit_rows_0_2", 0x38d8c8UL, 48, {124,27,139,242,1,39,149,204,181,179,222,39,80,85,2,239,147,151,198,249,196,185,174,227,40,14,8,183,64,184,61,212}},
     {"clip_rows_2_7", 0x38bbfcUL, 96, {206,177,188,244,226,44,173,239,234,104,81,251,144,195,167,239,230,248,170,252,179,167,74,162,175,188,188,114,79,27,121,251}},
+    {"descriptors_0_3", 0x38d968UL, 576, {67,73,225,241,136,171,126,194,6,14,165,183,93,88,62,219,162,20,247,61,35,82,245,154,192,76,212,36,161,189,113,148}},
 };
-#define AV_LO 0x0UL
+#define AV_LO 0x38b000UL
 #define AV_HI 0x3c9186UL
 #if DUMP
 static const struct dump_range dump_ranges[] = {

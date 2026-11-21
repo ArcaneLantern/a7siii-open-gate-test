@@ -15,7 +15,7 @@ ROOT = HERE.parents[2]
 EX = ROOT / "work/extracted/a7s3_501/0700_part_image/dev"
 DES = ROOT / "modding/designs"
 BASE = 0x108000
-LABEL = "s3read_v1"
+LABEL = "s3read_v2"
 CP_LO, CP_HI = 0xC0000, 0x2100000                     # coprocessor addresses a read may have: its logs (tomco.txt), image and RAM tables
 AVCAM_PHYS, AVCAM_RESERVE = 0x401000000, "@0x401000000"   # as on the A7 IV (memrsv=0x01000000@0x401000000:ex); checked on the camera before any read
 ID_FILES = {"/libmpr.so": "nflasha15/lib/libmpr.so", "/libsencore.so": "nflasha15/lib/libsencore.so", "/libJiritsu.so": "nflasha15/lib/libJiritsu.so"}
@@ -84,8 +84,10 @@ def main():
             av_hi = max(av_hi, o + len(old))
     out.append("static const struct mp_site lm_sites[] = {\n" + "\n".join(lmr) + "\n};")
     out.append("static const struct mp_site av_sites[] = {\n" + "\n".join(avr) + "\n};")
-    # guards: pieces of av-cam.bin that no site touches (file start; unit-type rows 0-2; clip-format rows 2-7)
-    guards = (("head", 0, 0x1000), ("unit_rows_0_2", 0x38389C + 0xA02C, 0x30), ("clip_rows_2_7", 0x38BBDC + 0x20, 0x60))
+    # guards: pieces of av-cam.bin's tables that no site touches (unit-type rows 0-2; clip-format rows 2-7; the first four descriptors).
+    # v1 also hashed the file's first 4,096 bytes; on the camera that page is not as in the file (first A7S III run, 2026-11-21: the only
+    # place that differed, and the reason for a NOT READY verdict on a stock camera), so it is no longer a guard and no longer mapped.
+    guards = (("unit_rows_0_2", 0x38389C + 0xA02C, 0x30), ("clip_rows_2_7", 0x38BBDC + 0x20, 0x60), ("descriptors_0_3", 0x38393C + 0xA02C, 4 * 0x90))
     spans = [(int(p["file_off"], 16), len(p["old"]) // 2) for p in fl["patches"] if p["binary"] == "av-cam.bin"]
     rows = []
     for name, o, n in guards:
@@ -93,7 +95,8 @@ def main():
         rows.append(f'    {{"{name}", {o:#x}UL, {n}, {c_bytes(hashlib.sha256(av[o:o + n]).digest())}}},')
         av_hi = max(av_hi, o + n)
     out.append("static const struct av_guard av_guards[] = {\n" + "\n".join(rows) + "\n};")
-    out.append(f"#define AV_LO 0x0UL\n#define AV_HI {av_hi:#x}UL")
+    av_lo = min([so for so, _ in spans] + [o for _, o, _ in guards]) & ~0xFFF
+    out.append(f"#define AV_LO {av_lo:#x}UL\n#define AV_HI {av_hi:#x}UL")
     rows = [f'    {{"{n}", {a:#x}, {k}}},' for n, a, k in DUMP_RANGES]
     assert all(CP_LO <= a and a + 4096 * k <= CP_HI for _, a, k in DUMP_RANGES)
     out.append("#if DUMP\nstatic const struct dump_range dump_ranges[] = {\n" + "\n".join(rows) + "\n};\n#endif")

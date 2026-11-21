@@ -101,6 +101,9 @@ LIBS = {1: ("libJit_level1.so", "70b2695e917a19e05ca15f674f1260dab6e19f479bb963a
         15: ("libJit_level15.so", "5917c00c4909f6324e62c2526ac1635c0c58bc1055fe31df3b5e276653f0aba2"),
         # level 21 is read-only: the raw ports' state, the encoding type each RDC port object last had set (level 15's code, its own ranges)
         21: ("libJit_level21.so", "50fe0a917cce83e9503cf3813fc9f33fb618a55b6a7a2732c0908b38028e085f"),
+        # level 28 is read-only: the frame widgets' state (the model rings cpActAfWindow and cpActTrackingFrame read, their rectangle tables, the
+        # display's fit-word page; F966, F967; level 15's code, its own ranges; build/frame_state.py decodes it)
+        28: ("libJit_level28.so", "d0b0735cd888df6ca0766732b620ca6d884b93486de96842854e67d509eecdcd"),
         # level 22 is read-only, main processor only: the VCD codec's clock word, its window registers and its program area (stage V2)
         22: ("libJit_level22.so", "ae7c5d2018a500ffbc1b157ecba8a6070d0ecb0f2a285d811f6b8bb29091c10d"),
         # level 26 is read-only, main processor only: the VCD program area as plain memory (F780), before any code of ours runs there
@@ -245,6 +248,10 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                                  17: ("libJit_level17_lcdratio21_v1.so", "975b425f8f3299123c7bc1de1c8737bef59443e401d27150c491efe1a046ff99")},
                "lcdratio24_v1": {16: ("libJit_level16_lcdratio24_v1.so", "a916fed727a658cddd0ff1759c773a711b12437b1f37885e611502c7a2a0afc0"),
                                  17: ("libJit_level17_lcdratio24_v1.so", "982c4e4a12d72c77ecfe0f72645f5ce0b357aa09c404979ce342871a34fb31ba")},
+               # lcdfill_v2 (F966): lcdfill_v1 plus the frame widgets' expected rectangle for a 16:9 picture on the rear panel (three table entries,
+               # 0xd7b5a0, 0xd7b618, 0xd7b690: the stock letterbox to the whole panel), so that the focus frames are drawn on the filled screen.
+               "lcdfill_v2": {16: ("libJit_level16_lcdfill_v2.so", "1393e38434ac21b2f1050cde5534fb06feed459bd9c837e0d5d69a0a0bd2f22c"),
+                              17: ("libJit_level17_lcdfill_v2.so", "468a2a922726da4bd870f4e5a5ba6e5022ef36fc833234f64d3eac124f2dda9f")},
                "lcdfill_v1": {16: ("libJit_level16_lcdfill_v1.so", "1141376a1dd43614a6b9950fd89b7449d292adceaecc254a4561a1f18c4cb57d"),
                               17: ("libJit_level17_lcdfill_v1.so", "1d9d823c49d4dc3c481a98e3ee9fadaeaf3b64dab42df56507326451a4db854c")},
                # level 18 (read-only, main processor only): what the sites of an encoder-side design hold now, in the kernel's copy of av-cam.bin and in
@@ -267,6 +274,10 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                # to; v3's function-event trigger never reaches process_input_event (the classifier makes it later).
                # lcdcycle_v5 (F857): v4's raw-C3 trigger; each press writes the VDF fit word and letterbox constants (3:2 / 2:1 / 2.4:1, F856) into the
                # coprocessor from appFw through libsencore (dlsym), then requests a fresh automatic layout. One hook, no hook 2.
+               # lcdcycle_v6 (F966): v5 plus the frame widgets' rectangle, written per preview mode, so the focus frames are drawn in 3:2, 2:1 and 2.4:1.
+               "lcdcycle_v6": {18: ("libJit_level18_lcdcycle_v6.so", "05948cf1d879d264bf05edb1a626496683fb8d74b2778de293d8ba4019194da0"),
+                               19: ("libJit_level19_lcdcycle_v6.so", "64a67f1f7d541e9946e1084a382884d11b11f17031cc29a746e18e0d1b58fe10"),
+                               20: ("libJit_level20_lcdcycle_v6.so", "1fbc9c43ce4e8a053e01f4900bb04bf3c4aea62543ff34d5e63ebea2301fc7ee")},
                "lcdcycle_v5": {18: ("libJit_level18_lcdcycle_v5.so", "3ad5810ffeb6fa954dc5517b9f54802e8029d68f92ef048862c528dc1fb546f4"),
                                19: ("libJit_level19_lcdcycle_v5.so", "590a450de873e70bce6b5a7414183aa46892e71e2afa5ac6b54055380c5d728c"),
                                20: ("libJit_level20_lcdcycle_v5.so", "70e66d2757378d7e2391fcf512f68525a667bcb728c19feebe54afcb267843ec")},
@@ -290,6 +301,12 @@ DESIGN_LIBS = {"fhband_v1": {5: ("libJit_level5_fhband_v1.so", "982d2ea9d8916246
                "ogfile57_v1": {18: ("libJit_level18_ogfile57_v1.so", "00b099ed7a787e3a9402b5dd7cfe1c1d81531863ed0c81651f9d38a6b47ca5d3"),
                                19: ("libJit_level19_ogfile57_v1.so", "aa1f318fafe1a71a5286b076c2f4fc274f68f196aeaf9bf8518b4841dd2c5f8a"),
                                20: ("libJit_level20_ogfile57_v1.so", "7f739de98479d67e907286fb771bd048173e22c1896a16947df695fd38899e4c")},
+               # ogfile57r300_v1 (2026-11-21; build/build_og57.py --rate300; a test the owner asked for): ogfile57_v1, and in the 11 profiles at 97
+               # million or more (the 100M record settings) the three rate fields get the figures of Sony's own dormant 5760x3240 profiles
+               # (300, 340, 340 million) and the level byte Level 6.1. 242 sites. Not run on a camera.
+               "ogfile57r300_v1": {18: ("libJit_level18_ogfile57r300_v1.so", "7ea1b14d914074136b687bb871e662eb1c4855b9af2d954fa132f6281f6e6613"),
+                                   19: ("libJit_level19_ogfile57r300_v1.so", "56f4af121f1b944fb50e94924035af3212b4e041ee3393e39d20d90a08693c75"),
+                                   20: ("libJit_level20_ogfile57r300_v1.so", "1a093b909f326695aad2e220df185ddc6815401386c91f00f82fd3c079b8f0c0")},
                # ogfile69_v1 (2026-11-20; build/build_og57.py --raster 6912 2880): the same 209 sites for a 6912x2880 picture (2.4:1): rows for the
                # first core 1440, +0x4c 10368, Level 6. The codec's own calculation asks less memory than for 5760x3840. Not run on a camera.
                "ogfile69_v1": {18: ("libJit_level18_ogfile69_v1.so", "15bccab5d034cabaf90b153c1e288193456a57a9dc1d01c774dbc323633dcdc3"),
@@ -562,6 +579,20 @@ def check_result(data):
                             "ranges": {n: {"address": "0x%08x" % a, "bytes": len(b), "sha256": c.sha256(b)} for n, (a, b) in ranges.items()},
                             "drive_mode_id": dec.get("drive_mode_id"), "output_size": dec.get("output_size"), "ports": dec.get("ports"),
                             "decode_problems": dec.get("problems"), "report": rdc_state.report(dec).split("\n")}
+        facts["_out_ranges"], facts["_out_decoded"] = ranges, dec
+    if LEVEL == 28:
+        sys.path.insert(0, str(HERE.parent.parent / "build"))
+        import frame_state
+        ranges = frame_state.parse_result(data)
+        part = data.split(b"== level 28:", 1)[1] if b"== level 28:" in data else b""
+        dec = frame_state.decode(ranges)
+        facts["level28"] = {"complete": b"\nlevel 28 complete\n" in data, "released": data.count(b"\nbuffer released\n"),
+                            "problems": [m.decode() for m in re.findall(rb"^!! .*$", re.sub(rb"== cp range \w+ at 0x[0-9a-f]{8} raw (\d+) bytes follow\n(?s:.*?)\n== cp range end\n", b"", part), re.M)],
+                            "ranges": {n: {"address": "0x%08x" % a, "bytes": len(b), "sha256": c.sha256(b)} for n, (a, b) in ranges.items()},
+                            **{k: dec.get(k) for k in ("index", "layout_now", "tracking_now", "frames_now", "afwindow_now", "tables_16x9_rear_panel",
+                                                       "tracking_check_now", "vdf_fit_word", "vdf_letterbox_words")},
+                            "frames_with_a_frame": len(dec.get("frames_with_a_frame") or []),
+                            "decode_problems": dec.get("problems"), "report": frame_state.report(dec).split("\n")}
         facts["_out_ranges"], facts["_out_decoded"] = ranges, dec
     if LEVEL in (13, 14):
         head = re.search(rb"^== level 1[34]: (apply|put back) the four memory-manager words of (\S+)$", data, re.M)
@@ -987,6 +1018,13 @@ def body_run(session, camera, lib):
                                                               "; reported: " + "; ".join(f["problems"]) if f["problems"] else ""))
         for line in f["report"]:
             session.say("  " + line)
+    if LEVEL == 28:
+        f = facts["level28"]
+        session.say("Level 28: %s; %d ranges copied (%s)%s" % ("complete" if f["complete"] else "NOT complete", len(f["ranges"]),
+                                                              ", ".join("%s %d bytes" % (n, r["bytes"]) for n, r in f["ranges"].items()),
+                                                              "; reported: " + "; ".join(f["problems"]) if f["problems"] else ""))
+        for line in f["report"]:
+            session.say("  " + line)
     if LEVEL == 21:
         f = facts["level21"]
         session.say("Level 21: %s; %d ranges copied (%s)%s" % ("complete" if f["complete"] else "NOT complete", len(f["ranges"]),
@@ -1222,6 +1260,9 @@ def run_helper(data):
     if LEVEL in (13, 14):
         files["/dev/mem"] = b""
         cp = emu_built.dmm_state_pages()                   # the firmware's own memory-manager state with nothing opened: a stock camera on stills (F677)
+    if LEVEL == 28:
+        files["/dev/mem"] = b""
+        cp = emu_built.frame_model()[1]                    # the four model rings with one entry of each filled in, and the file's tables
     if LEVEL == 21:
         files["/dev/mem"] = b""
         cp = emu_built.rdc_model()[1]                      # the 25 RDC objects with made-up types in an address pattern
@@ -1455,6 +1496,16 @@ def selftest(lib):
               and f["unit_records_equal_to_the_file"] and f["in_use_by_memory_id"] == {"0x43e": 1, "0x4b8": 1, "0x4af": 1} and f["write_buffer_change_would_take_effect"] is False
               and f["command_log"]["opens_by_memory_id"] == {"0x43e": 2, "0x4b8": 1, "0x4af": 1},
               "normal run, level 12: seven ranges copied out and decoded; the model's open units, its 0x89 division and its command log are reported")
+    if LEVEL == 28 and sim.how == "emulated":
+        f = r["result"]["level28"]
+        check(f["complete"] and not f["problems"] and not f["decode_problems"] and len(f["ranges"]) == 3 and f["released"] == 1
+              and f["index"] == {"layout": 3, "tracking": 5, "frames": 7, "afwindow": 9} and f["layout_now"]["kinds"][0]["rect_in_640x480"] == [0, 45, 640, 404]
+              and f["tracking_now"]["aspect"] == 4 and f["tracking_now"]["kind_selector"] == 1 and f["frames_now"]["count"] == 1
+              and f["frames_now"]["frames"][0]["rect"] == [100, 50, 80, 60] and f["afwindow_now"]["kind_selector_0x244"] == 1
+              and f["tables_16x9_rear_panel"] == {"af_window": [0, 38, 640, 404], "remote_send": [0, 38, 640, 404], "tracking": [0, 38, 640, 404]}
+              and f["tracking_check_now"]["expected"] == [0, 38, 640, 404] and f["tracking_check_now"]["result"].startswith("FAIL"),
+              "normal run, level 28: three ranges copied out and decoded: the ring entries the model filled in, the stock tables, and the tracking "
+              "check repeated (a rectangle 7 units off is reported as failing)")
     if LEVEL == 21 and sim.how == "emulated":
         f = r["result"]["level21"]
         check(f["complete"] and not f["problems"] and not f["decode_problems"] and len(f["ranges"]) == 2 and len(f["ports"]) == 25
@@ -1635,8 +1686,8 @@ def main():
     parser.add_argument("--level", type=int, choices=sorted(set(LIBS) | {13, 14, 16, 17, 18, 19, 20, 23, 24, 25}), default=1, help="which pinned build to use (default 1)")
     parser.add_argument("--design", choices=["og4k_data_v1"] + sorted(DESIGN_LIBS), default="og4k_data_v1",
                         help="for levels 5, 6 and 8: whose site table (default og4k_data_v1); for levels 13 and 14: dmmwb4080_v1 or dmmwb4688_v1; "
-                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1 or ogfile57_v1; "
-                             "for levels 19 and 20: ogfile2560_hs_v1, ogfile2560_hs_s_v1 or ogfile57_v1")
+                             "for levels 16 and 17: outsz2560_v1, og2560e4_v1, og57cp_v1, og57cp_v2, og57cp_v3 or lcdfill_v1; for level 18: ogfile2560_hs_v1, ogfile2560_s_v1, ogfile2560_hs_s_v1, ogfile57_v1 or ogfile57r300_v1; "
+                             "for levels 19 and 20: ogfile2560_hs_v1, ogfile2560_hs_s_v1, ogfile57_v1 or ogfile57r300_v1")
     parser.add_argument("--firmware-shown")
     parser.add_argument("--library-sha256", help="the SHA-256 of the library you reviewed; must equal the pinned one")
     args = parser.parse_args()

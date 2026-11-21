@@ -1,5 +1,5 @@
 {
- "label": "s3read_v1",
+ "label": "s3read_v2",
  "cp_lo": 786432,
  "cp_hi": 34603008,
  "avcam_phys": 17196646400,
@@ -128,9 +128,9 @@
  "lm_sites": 4,
  "av_sites": 101,
  "av_guards": [
-  "head",
   "unit_rows_0_2",
-  "clip_rows_2_7"
+  "clip_rows_2_7",
+  "descriptors_0_3"
  ],
  "dump_ranges": [
   [
