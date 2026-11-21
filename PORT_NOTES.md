@@ -14,7 +14,7 @@ The patch designs are in `windows/tools/modding/designs/`.
 | Step on the A7 IV | A7S III counterpart | State |
 |---|---|---|
 | 1. Enlarge the raw-frame write buffer (`dmmwb4688_v1`) | Probably not needed: the unit is 26,214,400 bytes and a full-height frame is about 4300 × 2876 | needs camera (the line size is unread) |
-| 2. Full-height sensor read-out, squeezed into the stock 4K picture (`ogsq_v3`) | `ogsq_s3_v1`: 12 sensor cells, the two 4K image-mode records, the stored drive-parameter record | see below |
+| 2. Full-height sensor read-out, squeezed into the stock 4K picture (`ogsq_v3`) | `ogsq_s3_v2`: 12 sensor cells, the two 4K image-mode records, the stored drive-parameter record | see below |
 | 3. Output size 3840×2160 → 3840×2560 (`outsz2560_v1`) | `outsz2560_s3_v1`: one word at `0x13ec2e4` | verified offline |
 | 4. Encoder side (`ogfile2560_hs_s_v1`) | `ogfile2560_hs_s_s3_v1`: 4 sites in `libmpr.so`, 101 in `av-cam.bin` | verified offline, one assumption |
 | 5, 6. Rear screen 3:2 and de-squeeze key | Left out: the A7S III has its own de-squeeze display | — |
@@ -35,7 +35,7 @@ The A7S III's image processor uses the same 3000-byte image-mode records as the 
 | 4K 24p mode | `0x8c0`, index 10, 7008×3942 from row 366 | `0x8c0`, index 12, 4240×2392 from row 220 | verified offline |
 | Full height | 7008×4672 | 4240×2832 | verified offline |
 | Line time at 24p | tight | ample (618 of 5,628 line periods used) | verified offline |
-| 4K image-mode records | `0xBF7638` / `0xBF81F0` | `0xBD80E0` / `0xBD8C98` | verified offline |
+| 4K image-mode records | `0xBF7638` / `0xBF81F0` | `0xBCFFF8` / `0xBD0BB0` (corrected, see the end) | verified offline |
 | Stored record of the mode | `0x1fd1fbc` | `0x1fe1554` (`0x1fe0504` + 12 × 0x15c) | matched; record emulated |
 | Movie size table | `0x143c784` | `0x13ec2ac`, same contents | verified offline |
 
@@ -87,3 +87,18 @@ Not answered by any read, and so tested for the first time by the write step:
 - the encoder at 2,560 rows on this body (same tables and codec firmware as the A7 IV, where it works)
 
 The write step is the A7 IV helper's own write code (`helper/readcheck.c`, levels 5/6, 16/17, 19/20) built with this camera's tables (`helper_s3/gen_s3_write.py`, `build_s3_write.sh`). Offline it was run in emulation on the stored record exactly as this camera held it in all three runs: applied, put back byte for byte.
+
+## The first two write tests, and the correction (2026-11-22)
+
+Two applies ran on the A7S III with sensor step v1. All three steps reported DONE, the camera stayed up and recorded 3840 × 2560. A dump taken with the patch live gave the scaler's own numbers:
+
+- the second scaler took columns 329 to 3910 (3,581 of 4,240) and all 2,392 rows of its input picture: a width crop to 84 %
+- its input picture was still the stock 4240 × 2392, and nothing in the camera core's state showed a 2,848-row stage
+
+**Cause.** The image processor picks its picture records with a selector keyed on the drive mode and on the left or right half. For 4K 24p and 30p (`0x8c0`, `0x820`) it returns the records at `0xBCFFF8` and `0xBD0BB0`. Step v1 changed `0xBD80E0` / `0xBD8C98`, a pair with the same picture sizes that belongs to mode `0x2820`. So the sensor was switched to full height, the first stage went on taking the stock 2,408 rows, and the 16/19 ratio then cut the width of an ordinary 16:9-sized picture.
+
+**What that takes back.** The two tests did not run the taller first stage. Room in the raw-frame buffer and the vertical squeeze in the first scaler are untested. The statement above that 49 height fields are zero on this camera was a property of the wrong pair: on the right records all 154 fields follow the A7 IV's rule.
+
+**Step v2** (`ogsq_s3_v2`) is the same sensor cells and stored-record bytes with the two records at the right addresses. The camera's own packing code reproduces the stock words of these records, and both emulation suites pass. It has not run on a camera.
+
+Confirmed by the two tests all the same: the write steps and their checks work on this body, the pointer chain to the stored record is right, the encoder accepts 2,560 rows, and the scaler result block is at `0x140043C`.

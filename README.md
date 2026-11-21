@@ -7,7 +7,9 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 **Where it stands (2026-11-22):**
 
 - The two read-only steps have run on an A7S III. The camera's software and every place the patch touches were as predicted.
-- **The write step has never run on any A7S III.** It is in this kit for a first test. It may give a wrong picture, or make the camera restart. Read "The write step" below before you run it.
+- The write step has run twice on an A7S III. All three steps applied, the camera stayed stable and recorded a 3840 × 2560 file, and a battery pull returned it to stock. **But the framing was wrong:** no extra height, and the width was cropped. The cause was found in the dump: the first version changed the picture records of a different video mode.
+- **This kit has the corrected version (sensor step v2). It has not run on a camera yet.** It is the first version that really makes the camera's first stage read the full sensor height, so a wrong picture or a restart is possible again. Read "The write step" below before you run it.
+- **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory.
 
 | Launcher | What it does | Writes to the camera? |
 |---|---|---|

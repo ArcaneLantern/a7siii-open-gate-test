@@ -34,15 +34,15 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "7e8793bd7b9d74cbc99e5f1347f559b3eedf92d71e85e86a3bf1f57d204b3bb9"),
-        "dump": ("libJit_s3_dump.so", "fd15e395100a5a82556803ef7625e1b76c6d4c7147d7e84e307df6b9c16de826")}
+PINS = {"check": ("libJit_s3_check.so", "05c72294a5e1fbf225d789899b48d44d6c785fd0e8d175f2da7b7d665253bd91"),
+        "dump": ("libJit_s3_dump.so", "3642e15d59a3d8b3acc8b4f07d1a200521ed39211a613761a934f5f9e05bd959")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
 # and the libraries are not in the published kit unless it was published with --include-write.
 WRITE_STEPS = {
-    "L5": ("libJit_s3_L5.so", "1993acd987b35e07f1edad9dcff90a986265bd1f264f45839f8edac8cfdbb497", "apply the sensor-side design ogsq_s3_v1 (14 sites and the stored record)"),
-    "L6": ("libJit_s3_L6.so", "59d5ad22a8526c2857d191fd31939148bbddd9a4985b944978069ddc14cdf9e6", "put back the sensor-side design ogsq_s3_v1"),
+    "L5": ("libJit_s3_L5.so", "71f9545384cad31582d7e0d4377857f88221a2b40afcf46108623cfb08ad72a3", "apply the sensor-side design ogsq_s3_v2 (14 sites and the stored record)"),
+    "L6": ("libJit_s3_L6.so", "dd8485e5ddd24c21ceb211468e37e7c2c01f4e65bd2b8e4e7e6c58a947dc3e9c", "put back the sensor-side design ogsq_s3_v2"),
     "L16": ("libJit_s3_L16.so", "ff206663b7df61ef6e20d182bbefba3e5341f2ddf1df588ffb38123f70eadc67", "apply the output size outsz2560_s3_v1 (one word)"),
     "L17": ("libJit_s3_L17.so", "b56744396d5035c3862b276c4e9a85e950c0bbe890accd849bb8102fee0533ba", "put back the output size outsz2560_s3_v1"),
     "L19": ("libJit_s3_L19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites)"),
@@ -163,14 +163,14 @@ def decode_pages(pages):
     # v3: the second scaler's state. The A7 IV's layouts at the addresses matched for this build; the three "predicted" addresses are the
     # A7 IV's distance from the division block and are NOT confirmed, so every place where a picture size of interest occurs is listed too.
     st = {}
-    blk = mem(0x1400434, 0x20)                    # A7 IV 0x145091c: in w, in h, start x, y, w-1, h-1, start fractions, size fractions (u16)
+    blk = mem(0x140043C, 0x20)                    # A7 IV 0x145091c: in w, in h, start x, y, w-1, h-1, start fractions, size fractions (u16)
     if blk is not None:
         w = struct.unpack_from("<10H", blk)
-        st["second_scaler_block_predicted_0x1400434"] = {"words": list(w), "start": [round(w[2] + w[6] / 4096, 3), round(w[3] + w[7] / 4096, 3)],
+        st["second_scaler_block_0x140043c"] = {"words": list(w), "start": [round(w[2] + w[6] / 4096, 3), round(w[3] + w[7] / 4096, 3)],
                                                         "size": [round(w[4] + w[8] / 4096, 3), round(w[5] + w[9] / 4096, 3)]}
-    inp = mem(0x1400470, 8)                       # A7 IV 0x1450958
+    inp = mem(0x1400478, 8)                       # A7 IV 0x1450958
     if inp is not None:
-        st["second_scaler_input_predicted_0x1400470"] = list(struct.unpack_from("<4H", inp))
+        st["second_scaler_input_0x1400478"] = list(struct.unpack_from("<4H", inp))
     ws = mem(0x11B5C40, 0xDC)                     # A7 IV 0x11e1510: pixel aspect +0x48, scales +0x4c / +0x50 (Q12), zoom +0x24 (Q16)
     if ws is not None:
         st["resize_work_0x11b5c40"] = {"pixel_aspect_q12": struct.unpack_from("<i", ws, 0x48)[0], "scale_h_q12": struct.unpack_from("<i", ws, 0x4C)[0],
@@ -216,7 +216,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v3 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v4 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:
@@ -319,11 +319,11 @@ def report(session, facts, which):
         ss = d.get("scaler_state")
         if ss:
             lines.append("second scaler state (addresses matched to the A7 IV's; the two 'predicted' ones are not confirmed):")
-            b = ss.get("second_scaler_block_predicted_0x1400434")
+            b = ss.get("second_scaler_block_0x140043c")
             if b:
                 lines.append("  block: words %s -> takes %s x %s from %s" % (b["words"], b["size"][0], b["size"][1], b["start"]))
-            if "second_scaler_input_predicted_0x1400470" in ss:
-                lines.append("  input words: %s" % ss["second_scaler_input_predicted_0x1400470"])
+            if "second_scaler_input_0x1400478" in ss:
+                lines.append("  input words: %s" % ss["second_scaler_input_0x1400478"])
             rw = ss.get("resize_work_0x11b5c40")
             if rw:
                 lines.append("  resize work: pixel aspect %d/4096, scales %d and %d /4096, zoom %d/65536" % (rw["pixel_aspect_q12"], rw["scale_h_q12"], rw["scale_v_q12"], rw["zoom_q16"]))

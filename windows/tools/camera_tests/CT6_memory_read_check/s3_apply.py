@@ -6,7 +6,7 @@
 NEVER RUN ON A CAMERA (2026-11-21). This is the write kit of the port; it is held back until the read-only steps
 (s3_run.py check and dump) have run on an A7S III and their results match what the port predicts.
 
-  apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v1), L16 output size (outsz2560_s3_v1),
+  apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v2), L16 output size (outsz2560_s3_v1),
            L19 encoder side (ogfile2560_hs_s_s3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
   putback  the reverse, L20, L17, L6. A cold boot (battery out for 10 seconds) also undoes everything.
 
@@ -61,7 +61,7 @@ def last_check():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 "))
+            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 "))
             return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
     return None
 

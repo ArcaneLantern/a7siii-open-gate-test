@@ -1,5 +1,5 @@
 {
- "label": "s3read_v3",
+ "label": "s3read_v4",
  "cp_lo": 786432,
  "cp_hi": 34603008,
  "avcam_phys": 17196646400,
@@ -90,13 +90,13 @@
   },
   {
    "name": "record_left",
-   "address": "0xbd80e0",
+   "address": "0xbcfff8",
    "length": 3000,
    "soft": 0
   },
   {
    "name": "record_right",
-   "address": "0xbd8c98",
+   "address": "0xbd0bb0",
    "length": 3000,
    "soft": 0
   },
@@ -185,7 +185,7 @@
   ]
  ],
  "designs": {
-  "ogsq_s3_v1": "615fcb244c2d0299e67ac3094fc166355e88a3e46e07f2c34dd67928b9c781f8",
+  "ogsq_s3_v2": "94a8b02d0464717d409d0861cf94a77f6e9b328009386f9ff52f14ccf6263452",
   "outsz2560_s3_v1": "2617bfbc7d843cce96a9203928378ca32243611ed0cc968ab0912afcdebbe16f",
   "ogfile2560_hs_s_s3_v1": "e5fa6b1e04b6288cbdb4b8bd97ea65d3fdf0f9b73bbd2e5899838dc0ae385afd"
  }
