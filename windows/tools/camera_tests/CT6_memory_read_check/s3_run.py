@@ -287,6 +287,19 @@ def report(session, facts, which):
         session.say(ln)
 
 
+def last_saved_sha():
+    """The SHA-256 of the result the newest saved session of this kit fetched, or None."""
+    root = c.PRIVATE_ROOT
+    if not root.is_dir():
+        return None
+    for folder in sorted((p for p in root.iterdir() if p.is_dir() and p.name.startswith("CT6_")), reverse=True):
+        try:
+            return json.loads((folder / "manifest.json").read_text(encoding="utf8"))["results"]["ct6"]["result"]["sha256"]
+        except (OSError, KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("which", choices=sorted(PINS))
@@ -314,7 +327,9 @@ def main():
     R.refusals(lib)
     selftest(lib)                                   # the flow must pass on the simulated camera on the day, before the real one
     import ct1_stage2_service as service
-    R.CLEAR_SHA = a.clear_result
+    # A result left on the RAM disk by the run before stops a new run (seen on the first A7S III session). Without --clear-result the newest
+    # result saved on this PC is named: the runner deletes the camera's file only if its SHA-256 is that one, i.e. only a result already here.
+    R.CLEAR_SHA = a.clear_result or last_saved_sha()
     body = R.body_remove_only if a.remove_only else R.body_run
     with c.Session("remove_only" if a.remove_only else "s3_%s" % a.which, test="CT6") as session:
         session.results.update(firmware_shown_on_camera=a.firmware_shown, model=MODEL, which=a.which, library_sha256=PINS[a.which][1],

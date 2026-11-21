@@ -1,6 +1,6 @@
 # Port notes: A7 IV 6.02 open gate → A7S III 5.01
 
-State on 2026-11-21. Everything below was read from the two firmware updates or emulated from them. **Nothing has run on an A7S III.** Each row says how far it is known:
+State on 2026-11-21. Everything below was read from the two firmware updates or emulated from them. The tables below are that offline state; what a camera has since confirmed is in "Camera results so far" at the end. **The write step has not run on an A7S III.** Each row says how far it is known:
 
 - **verified offline**: the firmware's own code was run in emulation, or the bytes were compared directly
 - **matched**: found by comparing code or tables with the A7 IV; not run
@@ -61,3 +61,29 @@ Three things differ in kind and carry the risk:
 | Any trouble logged by the image processor? | Dump: its kprint and boot logs |
 
 Still open after that, for the write step: room in the raw write buffer at full height, the image processor's working-state addresses for a read-back after applying, and the PAL mode.
+
+## Camera results so far (one A7S III, firmware 5.01, 2026-11-21)
+
+Three read-only runs: a check and a dump in the stills state, and a dump after a 4K 24p recording with the dial left on movie.
+
+| Question | Answer from the camera |
+|---|---|
+| Does the service route work on this body? | Yes: service device 054C:0336, same commands as the A7 IV; the helper was loaded and removed cleanly each time |
+| Is it the 5.01 software? | Yes: three libraries and four image-processor code pages equal the update |
+| Do all sites hold their stock bytes? | Yes: 12 sensor cells, both 4K records, 4 + 101 encoder sites |
+| Is the encoder program at `0x401000000`? | Yes: kernel command line and loader parameter both say so |
+| Is the emulated stored record right? | At the 17 bytes the design changes, yes, before and after a recording. The camera fills 3 to 23 other bytes as it runs; the write step leaves those alone |
+| Is the size table as emulated? | Yes; the output-size word and its guards are stock also in the stills state |
+| Are the sensor registers as the file's table says? | Yes. In 4K 24p the register state equals the 4K column in 480 of 489 rows (the rest are run-time values), and the four cells the design replaces hold the table's values 20, 14, 64, 1. In the stills state they hold 22, 0, 0, 0 |
+
+The first helper build reported NOT READY on this stock camera because it compared the first 4,096 bytes of the encoder program with the file; that page is not constant in memory. The guard was replaced (helper v2).
+
+Not answered by any read, and so tested for the first time by the write step:
+
+- that the four register cells are the whole vertical-window setting of the IMX510 (they reach the sensor; that the sensor then reads full height is inferred)
+- room in the raw-frame write buffer at full height
+- the squeeze ratio 16/19 in the camera's own resize fit
+- the pointer chain the sensor step follows to the stored record (if it is wrong the step writes nothing)
+- the encoder at 2,560 rows on this body (same tables and codec firmware as the A7 IV, where it works)
+
+The write step is the A7 IV helper's own write code (`helper/readcheck.c`, levels 5/6, 16/17, 19/20) built with this camera's tables (`helper_s3/gen_s3_write.py`, `build_s3_write.sh`). Offline it was run in emulation on the stored record exactly as this camera held it in all three runs: applied, put back byte for byte.
