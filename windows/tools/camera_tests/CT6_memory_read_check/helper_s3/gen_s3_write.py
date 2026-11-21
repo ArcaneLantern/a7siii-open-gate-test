@@ -4,7 +4,7 @@
 
 The write levels of readcheck.c are used as they are (levels 5/6, 16/17, 19/20: the code that ran on the A7 IV);
 only their tables differ. This writes, into helper/, in the formats helper/gen_expected.py writes:
-  expected_sites_ogsq_s3_v3.h             levels 5 and 6: the 14 sites and the changed bytes of the stored record
+  expected_sites_ogsq_s3_v4.h             levels 5 and 6: the 14 sites and the changed bytes of the stored record
   expected_words_outsz2560_s3_v1.h        levels 16 and 17: the output-size word and its two guards
   expected_mp_ogfile2560_hs_s_s3_v1.h     levels 19 and 20 (and 18): the encoder-side sites and guards
 Every stock byte is compared with the 5.01 files here. gen_expected.py is not used: its checks name A7 IV
@@ -27,7 +27,7 @@ DESC, UNIT, CLIP, COMB = 0x38393C + 0xA02C, 0x38389C + 0xA02C, 0x38BBDC, 0x2D32B
 hx = lambda b: ", ".join("0x%02x" % x for x in b)
 
 
-def sites_header(name="ogsq_s3_v3"):
+def sites_header(name="ogsq_s3_v4"):
     d = json.loads((DES / f"{name}.json").read_text(encoding="utf8"))
     image = (EX / "nflasha8/cpapp-b.bin").read_bytes()
     assert d["artifact_sha256"] == hashlib.sha256(image).hexdigest() and d["mode_id"] == "0x8c0"

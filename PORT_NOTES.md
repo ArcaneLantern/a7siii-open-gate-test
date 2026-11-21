@@ -133,3 +133,24 @@ So the records, the 16/19 ratio and the buffer are right. But the recorded pictu
 The register table itself is no longer touched, so the other 4K modes keep their stock sensor settings. The two picture records are v2's (their frame layout is the one `0xe011`'s own records have). The stored drive-parameter record is computed by running the camera's calculator on the changed tables: 62 bytes change, none of them one the camera was seen to rewrite while running.
 
 Guesses in v3: the `0xc71a24` value, the constant in the read-out table's frame-length fields, and the choice of P and E. Not known: whether the 4K first stage accepts one-row-per-line data, and whether the 4K 24p calibration suits the other sensor mode.
+
+## Step v3 on the camera, and step v4 (2026-11-22)
+
+**v3 ran once as designed** (library hashes and the dump confirm the version). After a recording the sensor's registers matched the full-height mode, the second scaler took all 2832 rows, and the log was clean. The tester compared the clip with a photo: the whole sensor area is in the file, and v2's purple cast and line artefacts are gone. Two faults in that run: the standby picture before the first recording looked like v2's (purple, lower part missing) and turned right when recording started; and the recorded picture has stepped tones.
+
+**Then it stopped working.** After a battery pull and a new apply, on every attempt the picture flickered as soon as movie mode was entered, and the camera froze and restarted. No dump of that state exists yet.
+
+**An error in v3's timing row.** The reading of the timing row above ("one line in every P is E units longer") was not exact. Checked on all 80 stock rows: in each of the 57 that have a fraction, E is smaller than P, P is odd and divides VMAX, VMAX is a multiple of 4, and E/P is the reduced fraction of (frame units / VMAX) − HMAX. So **E/P is the fractional part of the line length**: a line is HMAX + E/P units on average. v3's 59.94-system row, 312, 4788, P 57, E 91, asks for a fraction of 1.6. No stock row does that. The row is copied unchanged into the record that goes to the timing hardware, so what the hardware did with it is not known. If it lengthens every line by one unit, the frame rate is 24.022 instead of 23.976 fps, one frame too many about every 22 seconds; that would fit a picture that works for some seconds and then flickers and stops. This link is not shown.
+
+**Step v4** (`ogsq_s3_v4`) is v3 with that row corrected, and nothing else:
+
+| Cell | v3 | v4 |
+|---|---|---|
+| timing, 59.94 system | 312, 4788, P 57, E 91 | 313, 4788, P 57, E 34 (313.596 units per line, 23.976 fps) |
+
+The 50-system row (313, 4780, P 239, E 193) was valid and stays. VMAX is unchanged, so the read-out table is as in v3. In the stored record four bytes change against v3 (HMAX and E, in both copies of the row). HMAX 313 is one unit above the 312 the camera uses for this sensor mode; stock runs one register column at line lengths one or two units apart (263/264/265, 266/268, 330/331). No valid row exists at exactly 312.
+
+**Open after v4**, deliberately not changed in it so that one test answers one question:
+
+- The two picture records still describe the frame format of the stock 4K sensor mode in several words that follow the read-out type or the line length in every stock record (for example `+0x27c`, `+0x280`, `+0x284`, `+0x294`, `+0x2a8`, and `+0x328` = 5.5 × HMAX). `0xe011`'s own records also start the picture 76 columns later. The tester's frame has a brightness step about that far in from the left edge. Whether this is behind the stepped tones is not known.
+- Why the first standby differed from the recording in the one good run. The drive-mode selector (`0x411798`) takes the 24p or 30p family from the frame-rate setting and has no standby-or-recording input.

@@ -9,8 +9,10 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 - The two read-only steps have run on an A7S III. The camera's software and every place the patch touches were as predicted.
 - The write step has run twice on an A7S III. All three steps applied, the camera stayed stable and recorded a 3840 × 2560 file, and a battery pull returned it to stock. **But the framing was wrong:** no extra height, and the width was cropped. The cause was found in the dump: the first version changed the picture records of a different video mode.
 - Sensor step v2 fixed that and ran once. The camera's scaler then took the whole picture, as designed, and the raw-frame buffer had room. **But the sensor still delivered only the 16:9 band:** the lower sixth of the picture was black, blacks were purple, and there were line artefacts (also in other 4K modes while the patch was applied). On this sensor the vertical window belongs to the sensor's mode, and v2 had not changed the mode.
-- **This kit has sensor step v3. It has not run on a camera yet.** It gives 4K 24p the camera's own full-height sensor mode (the one it uses for fast full-frame stills read-out), with that mode's receiver settings and a new 23.976 fps frame timing. A wrong picture, wrong colours or a restart are all possible. Read "The write step" below before you run it.
-- **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory.
+- Sensor step v3 gave 4K 24p the camera's own full-height sensor mode (the one it uses for fast full-frame stills read-out), with that mode's receiver settings and a new 23.976 fps frame timing. It ran on an A7S III. **In one recording the whole sensor area reached the file** (checked against a photo), with stepped tones in the picture and a wrong standby picture before the recording. **On later attempts the picture flickered as soon as movie mode was entered, and the camera froze and restarted.** A battery pull returned it to stock each time.
+- We found an error of ours in v3: one value of the new frame timing was outside the range the camera's own timings use (see `PORT_NOTES.md`). It fits the flicker and the restart, but that it caused them is not shown.
+- **This kit has sensor step v4: v3 with that timing value corrected, and nothing else changed. It has not run on a camera yet. Do not run v3 again.** Flicker, a wrong picture or a restart are still possible. The stepped tones and the standby picture are not addressed in v4. Read "The write step" below before you run it.
+- **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory, and v4 will refuse to apply on top of it.
 
 | Launcher | What it does | Writes to the camera? |
 |---|---|---|
@@ -48,7 +50,7 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **What it changes.** Three groups of bytes in the running camera's memory: the sensor read-out and the two 4K picture records of the image processor (full sensor height instead of the 16:9 band), one size word (3840×2160 becomes 3840×2560), and the encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p. Each step first checks that every byte it is about to change holds its stock value, writes, reads back, and undoes its own writes if anything does not match.
 
-**What we do not know yet.** Whether the 4K picture pipeline accepts the full-height sensor mode's data (it reads one row per line, the stock 4K mode two), whether black level and colour are right in it (the camera's calibration for 4K 24p was made for the other sensor mode), and how exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). On the A7 IV a mistake of this kind showed as grey lines and a restart of the camera; a battery pull returned it to stock every time.
+**What we do not know yet.** Whether the corrected frame timing removes the flicker and the restart that v3 showed. Why v3's recording had stepped tones, and why its standby picture was wrong before the first recording. How exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). A battery pull returned the camera to stock after every fault so far.
 
 **While it is applied:** use only XAVC HS 4K or XAVC S 4K at 24p. Other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang. The rear screen and viewfinder will probably look squeezed vertically: the screen picture is not corrected on this camera yet. The recorded file is what counts.
 
@@ -58,19 +60,24 @@ What they do to the camera: they switch it to service mode, write one small prog
 2. Pull the battery for 10 seconds, put it back, switch on. **Dial on stills.** Do not go into movie mode yet.
 3. Connect USB and run `windows/open_gate_apply.cmd`. It starts only if your newest saved check or dump says READY. It asks for the firmware version and for a typed YES.
 4. It runs three steps. Between steps it asks you to **unplug and replug the USB cable. Do not switch the camera off and do not pull the battery** until it says all three steps passed.
-5. Unplug USB. Turn the dial to movie. Look at the picture. Record 5 to 10 seconds, stop, and play the clip back.
-6. **Leave the dial on movie**, connect USB and run `windows/dump_info.cmd`. With the patch applied, this dump reads the numbers the camera's scaler is actually using, which is what tells us whether the full sensor area reaches the file.
-7. To return to stock: battery out for 10 seconds. (`open_gate_putback.cmd` does the same in three steps without a power cut.)
+5. Unplug USB. Turn the dial to movie and **watch the picture for 30 seconds without recording**. Note what it shows (normal, purple, part missing, flicker).
+6. If it is still running: **leave the dial on movie**, connect USB and run `windows/dump_info.cmd`. This is the standby dump, taken before any recording. Unplug again.
+7. Record 20 to 30 seconds, stop, and play the clip back.
+8. **Leave the dial on movie**, connect USB and run `windows/dump_info.cmd` again. This dump reads the numbers the camera's scaler is actually using.
+9. To return to stock: battery out for 10 seconds. (`open_gate_putback.cmd` does the same in three steps without a power cut.)
+
+**If the camera restarts by itself** at any point: do not pull the battery. Turn the dial to stills, connect USB, run `windows/dump_info.cmd`, and only then pull the battery for 10 seconds. The camera's own log of the fault survives a restart but not a battery pull.
 
 **Please send back**
 
 - The zipped `windows/camera_private` folder.
-- The patched clip.
-- What you saw: a normal picture, a squeezed one, a cropped one, grey lines, a restart, a freeze.
+- The patched clip as the camera wrote it (the original file, not a re-encode or a screenshot).
+- What you saw, in standby and while recording: a normal picture, a squeezed one, a cropped one, stepped tones, flicker, a restart, a freeze, and after how many seconds.
+- Your settings: file format and record setting (bit depth), frame rate, NTSC or PAL, SteadyShot, lens compensation, and whether any of them changed since your last test.
 
 **For judging the framing** (the first test recorded 3840 × 2560, but which part of the sensor it holds is not settled): from a tripod, same lens, focus and scene, please also send a stills photo (the full 3:2 sensor area) and a few seconds of stock 4K 24p recorded after a battery pull. Comparing the patched clip with another video mode while the patch is applied does not work: the patch changes sensor settings that the other 4K modes share.
 
-**If the camera misbehaves** (grey lines, restart, freeze, recording that stops by itself): do not pull the battery straight away if the camera still responds. Connect USB, run `dump_info.cmd`, and send the folder: the camera's own log of what went wrong is lost with the battery pull. Then pull the battery for 10 seconds. If the camera does not respond at all, just pull the battery.
+**If the camera misbehaves** (grey lines, flicker, restart, freeze, recording that stops by itself): do not pull the battery straight away if the camera still responds. Turn the dial to stills, connect USB, run `dump_info.cmd`, and send the folder: the camera's own log of what went wrong is lost with the battery pull. Then pull the battery for 10 seconds. If the camera does not respond at all, just pull the battery.
 
 **If the apply stops part-way:** it says at which step. Pull the battery for 10 seconds to be sure of the camera's state, and send the folder.
 
