@@ -14,7 +14,7 @@ The patch designs are in `windows/tools/modding/designs/`.
 | Step on the A7 IV | A7S III counterpart | State |
 |---|---|---|
 | 1. Enlarge the raw-frame write buffer (`dmmwb4688_v1`) | Probably not needed: the unit is 26,214,400 bytes and a full-height frame is about 4300 × 2876 | needs camera (the line size is unread) |
-| 2. Full-height sensor read-out, squeezed into the stock 4K picture (`ogsq_v3`) | `ogsq_s3_v2`: 12 sensor cells, the two 4K image-mode records, the stored drive-parameter record | see below |
+| 2. Full-height sensor read-out, squeezed into the stock 4K picture (`ogsq_v3`) | `ogsq_s3_v3`: 19 sensor-side cells, the two 4K image-mode records, the stored drive-parameter record | see below |
 | 3. Output size 3840×2160 → 3840×2560 (`outsz2560_v1`) | `outsz2560_s3_v1`: one word at `0x13ec2e4` | verified offline |
 | 4. Encoder side (`ogfile2560_hs_s_v1`) | `ogfile2560_hs_s_s3_v1`: 4 sites in `libmpr.so`, 101 in `av-cam.bin` | verified offline, one assumption |
 | 5, 6. Rear screen 3:2 and de-squeeze key | Left out: the A7S III has its own de-squeeze display | — |
@@ -102,3 +102,34 @@ Two applies ran on the A7S III with sensor step v1. All three steps reported DON
 **Step v2** (`ogsq_s3_v2`) is the same sensor cells and stored-record bytes with the two records at the right addresses. The camera's own packing code reproduces the stock words of these records, and both emulation suites pass. It has not run on a camera.
 
 Confirmed by the two tests all the same: the write steps and their checks work on this body, the pointer chain to the stored record is right, the encoder accepts 2,560 rows, and the scaler result block is at `0x140043C`.
+
+## Step v2 on the camera, and step v3 (2026-11-22)
+
+**v2 ran once.** The dump taken with it applied:
+
+- camera core: first stage 4288 × 2848, cropped to 4240 × 2832; reference window 4240 × 2832
+- second scaler: takes 4240 × 2391.9 of its 4240 × 2392 input (everything); vertical scale 2392/2832
+- no error line in the image processor's log: the raw-frame buffer accepted the taller frame
+
+So the records, the 16/19 ratio and the buffer are right. But the recorded picture ended at 81 to 84 % of the height (2392/2832 is 84.5 %), with purple blacks and line artefacts: the sensor went on delivering the 16:9 band.
+
+**Why.** Across the sensor's register table, the full-frame 4K mode, the 3840 × 2160 crop mode and the S35 mode differ from each other in the mode register and a handful of companion registers; no register holds a first or last row. The vertical window is a property of the sensor mode, as on the A7 IV's sensor. Steps v1 and v2 changed four companions and left the mode at the 4K band. (The A7 IV patch switches the mode; I had not done that here because no stock mode is "4K timing, full height".)
+
+**Frame timing, decoded.** A timing row is HMAX, VMAX and `flag | P<<8 | E<<16`: one line in every P is E units longer, and a frame is HMAX × VMAX + (VMAX / P) × E units of 1/36 MHz. Stock 4K 24p: 266 × 5628 + 84 × 53 = 1,501,500 units = 23.976 fps. This reproduces the frame rate of all 40 drive modes.
+
+**Step v3** (`ogsq_s3_v3`) gives drive mode `0x8c0` the sensor mode of drive mode `0xe011` (full height 4240 × 2832, one row per line, up to 36.7 fps):
+
+| Cell | Stock | v3 |
+|---|---|---|
+| register table column | 11 (sensor mode `0x21`) | 1 (sensor mode `0x01`) |
+| receiver type (two tables) | 5, 3 | 0, 2 (as `0xe011` and the S35 movie modes) |
+| timing, 59.94 system | 266, 5628, P 67, E 53 | 312, 4788, P 57, E 91 (23.976 fps) |
+| timing, 50 system | 268, 5580, P 93, E 76 | 313, 4780, P 239, E 193 (24.000 fps) |
+| window top margins, height | 38, 6, 2392 | 122, 22, 2832 |
+| aux stream, LC, crop, geometry rows | band values | `0xe011`'s values (offsets 0) |
+| read-out table | 1384, 1372, 618, 618 | 1174, 1172, 728, 728 |
+| `0xc71a24` +4 (meaning not known) | 478 | 484 |
+
+The register table itself is no longer touched, so the other 4K modes keep their stock sensor settings. The two picture records are v2's (their frame layout is the one `0xe011`'s own records have). The stored drive-parameter record is computed by running the camera's calculator on the changed tables: 62 bytes change, none of them one the camera was seen to rewrite while running.
+
+Guesses in v3: the `0xc71a24` value, the constant in the read-out table's frame-length fields, and the choice of P and E. Not known: whether the 4K first stage accepts one-row-per-line data, and whether the 4K 24p calibration suits the other sensor mode.

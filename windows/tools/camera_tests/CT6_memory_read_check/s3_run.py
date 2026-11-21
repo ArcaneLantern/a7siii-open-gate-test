@@ -34,15 +34,15 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "05c72294a5e1fbf225d789899b48d44d6c785fd0e8d175f2da7b7d665253bd91"),
-        "dump": ("libJit_s3_dump.so", "3642e15d59a3d8b3acc8b4f07d1a200521ed39211a613761a934f5f9e05bd959")}
+PINS = {"check": ("libJit_s3_check.so", "169966a75626ff9b8173f0d94adf2cf054bb0c5fece4fe2ba7c6a9a03fa44fad"),
+        "dump": ("libJit_s3_dump.so", "a48da9568b7d754a6550384f854e9b256b9c689817389d4ede1d4e62a9f298c4")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
 # and the libraries are not in the published kit unless it was published with --include-write.
 WRITE_STEPS = {
-    "L5": ("libJit_s3_L5.so", "71f9545384cad31582d7e0d4377857f88221a2b40afcf46108623cfb08ad72a3", "apply the sensor-side design ogsq_s3_v2 (14 sites and the stored record)"),
-    "L6": ("libJit_s3_L6.so", "dd8485e5ddd24c21ceb211468e37e7c2c01f4e65bd2b8e4e7e6c58a947dc3e9c", "put back the sensor-side design ogsq_s3_v2"),
+    "L5": ("libJit_s3_L5.so", "0f84d19884c48daddfcd3e9695d1f978c244aa24375b6299c37e7788a488eb44", "apply the sensor-side design ogsq_s3_v3 (sensor cells, two records, the stored record)"),
+    "L6": ("libJit_s3_L6.so", "ffdd11e0a01d661328306aed6bea66476601b67b4c7374db243d9dc71f3af85c", "put back the sensor-side design ogsq_s3_v3"),
     "L16": ("libJit_s3_L16.so", "ff206663b7df61ef6e20d182bbefba3e5341f2ddf1df588ffb38123f70eadc67", "apply the output size outsz2560_s3_v1 (one word)"),
     "L17": ("libJit_s3_L17.so", "b56744396d5035c3862b276c4e9a85e950c0bbe890accd849bb8102fee0533ba", "put back the output size outsz2560_s3_v1"),
     "L19": ("libJit_s3_L19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites)"),
@@ -216,7 +216,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v4 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v5 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:
@@ -267,7 +267,7 @@ def selftest(lib):
     else:
         check(f.get("ready") and not f.get("identity_differs"), "normal run: the %s helper reports a stock 5.01 camera as READY" % sim.how)
     if sim.how == "emulated":
-        check(len(f["coprocessor_sites"]) == 18 and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == 4, "normal run: all 18 + 4 + 101 sites are reported")
+        check(len(f["coprocessor_sites"]) == len(expected()["cp_sites"]) and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == 4, "normal run: every coprocessor site, 4 libmpr and 101 av-cam sites are reported")
         if WHICH == "dump":
             d = f.get("decoded", {})
             check(d.get("matrix_equals_file") and len(d.get("stored_records", {})) == 40 and d.get("size_table"), "dump: the pages decode (matrix, 40 records, size table)")

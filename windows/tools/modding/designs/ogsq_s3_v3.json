@@ -1,21 +1,40 @@
 {
- "design": "ogsq_s3_v2",
+ "design": "ogsq_s3_v3",
  "build": "a7s3_501",
  "camera": "ILCE-7SM3 (A7S III), firmware 5.01",
- "title": "Full-height frame in drive mode 0x8c0, first-stage window of 2848 rows (2832 active) from active row 0, stock picture after the scaler; vertical sampling ratio 16/19 in the stored drive-parameter record",
+ "title": "Full height in drive mode 0x8c0 through the sensor's full-height mode (matrix column 1, as 0xe011): receiver type, timing, margins and offsets of that mode; first-stage window of 2848 rows squeezed by Lrc into the stock picture (records of ogsq_s3_v2)",
  "status": "built from the firmware files and emulated in parts; never run on a camera",
  "artifact": "cpapp-b.bin",
  "artifact_sha256": "63122fceaeed8934258dba414bb215e4fc48631860eb6537e1b0c84cbe5d6843",
- "generated_by": "build/build_og_s3.py --name ogsq_s3_v2",
- "ported_from": "ogsq_v3 (A7 IV 6.02), by the address map and field classes of modding/A7S3_PORT.md",
+ "generated_by": "build/build_og_s3_v3.py",
+ "replaces": "ogsq_s3_v2 (sensor cells only; the records are unchanged)",
  "mode_id": "0x8c0",
  "mode_index": 12,
- "records_base": "0x1fe0504",
- "record_size": 348,
+ "sensor_mode_taken_from": "0xe011 (index 37)",
+ "timing": {
+  "tim": {
+   "hmax": 312,
+   "vmax": 4788,
+   "p": 57,
+   "e": 91,
+   "units": 1501500,
+   "fps": 23.976024,
+   "system": "59.94 system"
+  },
+  "tim_b": {
+   "hmax": 313,
+   "vmax": 4780,
+   "p": 239,
+   "e": 193,
+   "units": 1500000,
+   "fps": 24.0,
+   "system": "50 system"
+  }
+ },
  "summary": {
-  "sites": 14,
-  "bytes": 6020,
-  "sensor_cells": 12,
+  "sites": 21,
+  "bytes": 6092,
+  "sensor_cells": 19,
   "records": 2
  },
  "lrc": {
@@ -56,91 +75,93 @@
    ]
   }
  },
- "check": {
-  "L": {
-   "fields": 154,
-   "off_rule": [],
-   "zero_on_this_build": [],
-   "packer_words_not_reproduced_on_stock": {
-    "CamArc": 0,
-    "CamNrs": 0,
-    "CamSig": 0,
-    "Dev (first packer)": 0,
-    "Dev (second packer)": 0,
-    "CamLrc": 0,
-    "Dev (first packer, beyond the list)": 0
-   }
-  },
-  "R": {
-   "fields": 154,
-   "off_rule": [],
-   "zero_on_this_build": [],
-   "packer_words_not_reproduced_on_stock": {
-    "CamArc": 0,
-    "CamNrs": 0,
-    "CamSig": 0,
-    "Dev (first packer)": 0,
-    "Dev (second packer)": 0,
-    "CamLrc": 0,
-    "Dev (first packer, beyond the list)": 0
-   }
-  }
- },
  "patches": [
+  {
+   "kind": "S",
+   "addr": "0xc7042c",
+   "old": "0b000000",
+   "new": "01000000",
+   "note": "C column map: register matrix column 11 (sensor mode 0x21, the 16:9 band) -> 1 (sensor mode 0x01, full height), as 0xe011",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc70ed4",
+   "old": "0500",
+   "new": "0000",
+   "note": "R1+0x0 receiver type: 5, 3 -> 0, 2, as 0xe011 and the S35 movie modes",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc70ed8",
+   "old": "0300",
+   "new": "0200",
+   "note": "R1+0x4 receiver type: 5, 3 -> 0, 2, as 0xe011 and the S35 movie modes",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc71864",
+   "old": "0500",
+   "new": "0000",
+   "note": "R2+0x0 receiver type, second table: 5, 3 -> 0, 2",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc71868",
+   "old": "0300",
+   "new": "0200",
+   "note": "R2+0x4 receiver type, second table: 5, 3 -> 0, 2",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc71b78",
+   "old": "de01",
+   "new": "e401",
+   "note": "D+0x4 0xc71a24 +4: 478 -> 484, the value of the modes on sensor mode 0x01 (meaning not known)",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc71144",
+   "old": "0a010000fc150000014335000a010000fc15000001433500",
+   "new": "38010000b412000001395b0038010000b412000001395b00",
+   "note": "T.tim timing row, 59.94 system: 266, 5628, P 67, E 53 -> 312, 4788, P 57, E 91 (23.9760 fps)",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc71504",
+   "old": "0c010000cc150000015d4c000c010000cc150000015d4c00",
+   "new": "39010000ac12000001efc10039010000ac12000001efc100",
+   "note": "T.tim_b timing row, 50 system: 268, 5580, P 93, E 76 -> 313, 4780, P 239, E 193 (24.0000 fps)",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xd67dda",
+   "old": "26000600",
+   "new": "7a001600",
+   "note": "W+0x12 stream-0 window row: 0xe011's (top margins 38, 6 -> 122, 22; height 2392 -> 2832)",
+   "where": "file"
+  },
   {
    "kind": "S",
    "addr": "0xd67de2",
    "old": "5809",
    "new": "100b",
-   "note": "S1 stream-0 active height: 2392 -> 2832",
+   "note": "W+0x1a stream-0 window row: 0xe011's (top margins 38, 6 -> 122, 22; height 2392 -> 2832)",
    "where": "file"
   },
   {
    "kind": "S",
-   "addr": "0xc707ba",
-   "old": "dc00",
+   "addr": "0xd683ce",
+   "old": "0100",
    "new": "0000",
-   "note": "S2 crop V offset: 220 -> 0",
-   "where": "file"
-  },
-  {
-   "kind": "S",
-   "addr": "0xd68af6",
-   "old": "6a02",
-   "new": "d802",
-   "note": "S3a read-out length (line periods): rows / 4 + 20, as 2392 / 4 + 20 = 618 stock: 618 -> 728",
-   "where": "file"
-  },
-  {
-   "kind": "S",
-   "addr": "0xd68af8",
-   "old": "6a02",
-   "new": "d802",
-   "note": "S3b read-out length, second copy: 618 -> 728",
-   "where": "file"
-  },
-  {
-   "kind": "S",
-   "addr": "0xc18026",
-   "old": "dc00",
-   "new": "0000",
-   "note": "S4 geometry row V offset (rows keyed by mode id; the still's row holds 0): 220 -> 0",
-   "where": "file"
-  },
-  {
-   "kind": "S",
-   "addr": "0xd68890",
-   "old": "dc00",
-   "new": "0000",
-   "note": "S7 LC table V offset: 220 -> 0",
-   "where": "file"
-  },
-  {
-   "kind": "S",
-   "addr": "0xd68894",
-   "old": "eb00",
-   "new": "2500",
-   "note": "S8 LC table field 6: 235 -> 37",
+   "note": "A+0x16 aux stream-1 row: 0xe011's",
    "where": "file"
   },
   {
@@ -148,39 +169,63 @@
    "addr": "0xd683d2",
    "old": "1900",
    "new": "1d00",
-   "note": "S10 aux stream-1 rows: 25 -> 29",
+   "note": "A+0x1a aux stream-1 row: 0xe011's",
    "where": "file"
   },
   {
    "kind": "S",
-   "addr": "0xf2ebe7",
-   "old": "14",
-   "new": "16",
-   "note": "S0.6 register matrix row 6, column 11 (shared by ten 4K modes): the full-height columns' value: 20 -> 22",
+   "addr": "0xd683d6",
+   "old": "0200",
+   "new": "0300",
+   "note": "A+0x1e aux stream-1 row: 0xe011's",
    "where": "file"
   },
   {
    "kind": "S",
-   "addr": "0xf2ebf7",
-   "old": "0e",
-   "new": "00",
-   "note": "S0.7 register matrix row 7, column 11 (shared by ten 4K modes): the full-height columns' value: 14 -> 0",
+   "addr": "0xd68890",
+   "old": "dc00",
+   "new": "0000",
+   "note": "LC+0x8 LC row: 0xe011's (V offset 220 -> 0, field 6 235 -> 37)",
    "where": "file"
   },
   {
    "kind": "S",
-   "addr": "0xf2ed07",
-   "old": "40",
-   "new": "00",
-   "note": "S0.24 register matrix row 24, column 11 (shared by ten 4K modes): the full-height columns' value: 64 -> 0",
+   "addr": "0xd68894",
+   "old": "eb00",
+   "new": "2500",
+   "note": "LC+0xc LC row: 0xe011's (V offset 220 -> 0, field 6 235 -> 37)",
    "where": "file"
   },
   {
    "kind": "S",
-   "addr": "0xf2ee27",
-   "old": "01",
-   "new": "00",
-   "note": "S0.42 register matrix row 42, column 11 (shared by ten 4K modes): the full-height columns' value: 1 -> 0",
+   "addr": "0xc707ba",
+   "old": "dc00",
+   "new": "0000",
+   "note": "CR+0x6 crop row: 0xe011's (V offset 220 -> 0, last field 2 -> 0)",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc707c6",
+   "old": "0200",
+   "new": "0000",
+   "note": "CR+0x12 crop row: 0xe011's (V offset 220 -> 0, last field 2 -> 0)",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xc18026",
+   "old": "dc00",
+   "new": "0000",
+   "note": "G geometry row of 0x8c0: V offset 220 -> 0",
+   "where": "file"
+  },
+  {
+   "kind": "S",
+   "addr": "0xd68af2",
+   "old": "68055c056a026a02",
+   "new": "96049404d802d802",
+   "note": "L read-out table: frame-length fields 1384, 1372 -> 1174, 1172 (VMAX / 4 - 23); row fields 618 -> 728 (rows / 4 + 20)",
    "where": "file"
   },
   {
@@ -203,46 +248,84 @@
  "stored_record": {
   "address": "0x1fe1554",
   "stock": "0000000001010101000000000000000001000c01010000000200000008000000c00800000a010000fc150000014335000a010000fc150000014335000500000003000000700800000000000008000c0090100c000c00140000002600060006000800580908000000000000000000000000000400000054080400020008006a081a00040001000000190000000200000000000000050000000300000002000000000001000000010000000000ee410000d30e0000e4000000702801000000040001007f057f05060a001000102b76510000002d0c01040000e80368050100020004000000db149600dd089600dd0801010000dc0004000000010000000000dc0000000000000000000000020000000000ee410000d30e0000e4000000a51d00000000040001007f057f05060a001000102b76510000002d0d01040000e8036a020200020004000000db142c002f002c002f0001010100eb00ffff0000",
-  "design": "0000000001011013000000000000000001000c01010000000200000008000000c00800000a010000fc150000014335000a010000fc150000014335000500000003000000700800000000000008000c0090100c000c00140000002600060006000800100b08000000000000000000000000000400000054080400020008006a081a000400010000001d0000000200000000000000050000000300000002000000000001000000010000000000ee410000d30e0000e4000000702801000000040001007f057f05060a001000102b76510000002d0c01040000e80368050100020004000000db149d007e0a9d007e0a01010000000004000000010000000000000000000000000000000000020000000000ee410000d30e0000e4000000a51d00000000040001007f057f05060a001000102b76510000002d0d01040000e803d8020200020004000000db142c0037002c003700010101002500ffff0000",
+  "design": "0000000001011013000000000000000001000c01010000000200000008000000c008000038010000b412000001395b0038010000b412000001395b000000000002000000700800000000000008000c0090100c000c00140000007a00160006000800100b08000000000000000000000000000400000054080400020008006a081a000400000000001d00000003000000000000000000000002000000020000000000010000000100000000006a4c00006d110000e4000000497f0100000004000100ad04ad04060a001000102b76510000002d0c01040000e80396040100020004000000db142901560c2901560c010100000000040000000100000000000000000000000000000000000000000000006a4c00006d110000e4000000d9220000000004000100ad04ad04060a001000102b76510000002d0d01040000e803d8020200020004000000db143100410031004100010101002500ffff0000",
   "offsets_that_differ": [
    "0x6",
    "0x7",
+   "0x24",
+   "0x28",
+   "0x29",
+   "0x2d",
+   "0x2e",
+   "0x30",
+   "0x34",
+   "0x35",
+   "0x39",
+   "0x3a",
+   "0x3c",
+   "0x40",
+   "0x5a",
+   "0x5c",
    "0x62",
    "0x63",
+   "0x84",
    "0x88",
+   "0x8c",
+   "0x94",
+   "0x98",
+   "0xac",
+   "0xad",
+   "0xb0",
+   "0xb1",
+   "0xb8",
+   "0xb9",
+   "0xc2",
+   "0xc3",
+   "0xc4",
+   "0xc5",
+   "0xda",
+   "0xdb",
    "0xe6",
+   "0xe7",
    "0xe8",
    "0xe9",
    "0xea",
+   "0xeb",
    "0xec",
    "0xed",
    "0xf2",
    "0xfe",
+   "0x10a",
+   "0x110",
+   "0x111",
+   "0x114",
+   "0x115",
+   "0x11c",
+   "0x11d",
+   "0x126",
+   "0x127",
+   "0x128",
+   "0x129",
    "0x13e",
+   "0x14a",
    "0x14c",
+   "0x14e",
    "0x150",
    "0x156"
   ],
-  "full_height_still_0xa000": "0200000001010101000000000000000001000e0101000000020000000800000000a0000014020000440c00000000000014020000440c0000000000000000000001000000700800000000000008000c0090100c000c00140000007a00160006000800100b08000000000000000000000000000400000054080400020008006a081a000400000000001d0000000300000000000000000000000100000002000000000001000000010000000000408100008f1d0000e4000000398a020000000400010011031103060a060a00101da15a0000002d0c02040000e803df0201000200040000003317f701ed14f701ed1401010000000004000000010000000000000032000000000000000000000000000000408100008f1d0000e40000001d3b000000000400010011031103060a060a00101da15a0000002d0d02040000e80300000200020004000000331753006e0053006e00010101002500ffff0000",
-  "extra": [
-   {
-    "offset": "0x6",
-    "old": "01",
-    "new": "10",
-    "note": "vertical sampling ratio, numerator"
-   },
-   {
-    "offset": "0x7",
-    "old": "01",
-    "new": "13",
-    "note": "vertical sampling ratio, denominator"
-   }
-  ]
+  "run_time_offsets_left_alone": [],
+  "bytes_differing_from_0xe011_record": 54
  },
+ "guesses": [
+  "0xc71a24 +4 = 484 (taken from the modes on sensor mode 0x01)",
+  "frame-length fields = VMAX / 4 - 23 (the stock 4K rule)",
+  "timing rows with P and E chosen by search, P odd and VMAX a multiple of 4 as in every stock movie row",
+  "class byte 0xc709e4 +0 kept at the movie value 0"
+ ],
  "not_shown": [
-  "that the four register-matrix cells are the whole vertical-window layer of the IMX510 (inferred from the columns)",
-  "that the A7S III raw write buffer holds a full-height frame (unit 26,214,400 bytes; line bytes not read)",
-  "the resize fit with these ratio bytes (the A7 IV's emu_rc_fit.py is not ported)",
+  "that the FF 4K first stage accepts the one-row-per-line raw format of sensor mode 0x01",
+  "that the calibration the camera applies for drive mode 0x8c0 suits sensor mode 0x01 (black level, colour)",
+  "exposure, autofocus and rolling shutter in this mode (read-out is about 26 ms)",
   "anything on a camera"
  ]
 }

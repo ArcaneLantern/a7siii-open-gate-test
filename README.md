@@ -8,7 +8,8 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 
 - The two read-only steps have run on an A7S III. The camera's software and every place the patch touches were as predicted.
 - The write step has run twice on an A7S III. All three steps applied, the camera stayed stable and recorded a 3840 × 2560 file, and a battery pull returned it to stock. **But the framing was wrong:** no extra height, and the width was cropped. The cause was found in the dump: the first version changed the picture records of a different video mode.
-- **This kit has the corrected version (sensor step v2). It has not run on a camera yet.** It is the first version that really makes the camera's first stage read the full sensor height, so a wrong picture or a restart is possible again. Read "The write step" below before you run it.
+- Sensor step v2 fixed that and ran once. The camera's scaler then took the whole picture, as designed, and the raw-frame buffer had room. **But the sensor still delivered only the 16:9 band:** the lower sixth of the picture was black, blacks were purple, and there were line artefacts (also in other 4K modes while the patch was applied). On this sensor the vertical window belongs to the sensor's mode, and v2 had not changed the mode.
+- **This kit has sensor step v3. It has not run on a camera yet.** It gives 4K 24p the camera's own full-height sensor mode (the one it uses for fast full-frame stills read-out), with that mode's receiver settings and a new 23.976 fps frame timing. A wrong picture, wrong colours or a restart are all possible. Read "The write step" below before you run it.
 - **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory.
 
 | Launcher | What it does | Writes to the camera? |
@@ -47,7 +48,7 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **What it changes.** Three groups of bytes in the running camera's memory: the sensor read-out and the two 4K picture records of the image processor (full sensor height instead of the 16:9 band), one size word (3840×2160 becomes 3840×2560), and the encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p. Each step first checks that every byte it is about to change holds its stock value, writes, reads back, and undoes its own writes if anything does not match.
 
-**What we do not know yet.** Whether the sensor then reads its full height, whether the camera's raw-frame buffer has room for it, and whether the picture comes out whole. On the A7 IV the same kind of mistake showed as grey lines and a restart of the camera; a battery pull returned it to stock every time.
+**What we do not know yet.** Whether the 4K picture pipeline accepts the full-height sensor mode's data (it reads one row per line, the stock 4K mode two), whether black level and colour are right in it (the camera's calibration for 4K 24p was made for the other sensor mode), and how exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). On the A7 IV a mistake of this kind showed as grey lines and a restart of the camera; a battery pull returned it to stock every time.
 
 **While it is applied:** use only XAVC HS 4K or XAVC S 4K at 24p. Other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang. The rear screen and viewfinder will probably look squeezed vertically: the screen picture is not corrected on this camera yet. The recorded file is what counts.
 

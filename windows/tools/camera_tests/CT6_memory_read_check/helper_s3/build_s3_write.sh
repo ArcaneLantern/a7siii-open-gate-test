@@ -10,8 +10,8 @@ cd "$H/../helper"
 CC=(../../../work/venv_zig/Scripts/python.exe -m ziglang cc -target aarch64-linux-gnu -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -nostdlib -ffreestanding
     -fno-stack-protector -fno-builtin -fno-asynchronous-unwind-tables -Wl,-soname,libJit.so -Wl,--no-undefined -Wl,-z,now -g0 -s -Wl,-z,max-page-size=4096)
 for L in 5 6; do
-  "${CC[@]}" -DLEVEL=$L '-DSITES_H="expected_sites_ogsq_s3_v2.h"' '-DDESIGN_LABEL="ogsq_s3_v2"' -DIMAGER=0x12a41f0UL -DCTRL_DRVPARAM=0x698U \
-    '-DSITES_TEXT="14"' '-DALL_TEXT="15"' readcheck.c "$SEN" -o "$H/libJit_s3_L$L.so"
+  "${CC[@]}" -DLEVEL=$L '-DSITES_H="expected_sites_ogsq_s3_v3.h"' '-DDESIGN_LABEL="ogsq_s3_v3"' -DIMAGER=0x12a41f0UL -DCTRL_DRVPARAM=0x698U \
+    readcheck.c "$SEN" -o "$H/libJit_s3_L$L.so"
 done
 for L in 16 17; do
   "${CC[@]}" -DLEVEL=$L '-DWORDS_H="expected_words_outsz2560_s3_v1.h"' readcheck.c "$SEN" -o "$H/libJit_s3_L$L.so"

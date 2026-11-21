@@ -4,7 +4,7 @@
 
 The write levels of readcheck.c are used as they are (levels 5/6, 16/17, 19/20: the code that ran on the A7 IV);
 only their tables differ. This writes, into helper/, in the formats helper/gen_expected.py writes:
-  expected_sites_ogsq_s3_v2.h             levels 5 and 6: the 14 sites and the changed bytes of the stored record
+  expected_sites_ogsq_s3_v3.h             levels 5 and 6: the 14 sites and the changed bytes of the stored record
   expected_words_outsz2560_s3_v1.h        levels 16 and 17: the output-size word and its two guards
   expected_mp_ogfile2560_hs_s_s3_v1.h     levels 19 and 20 (and 18): the encoder-side sites and guards
 Every stock byte is compared with the 5.01 files here. gen_expected.py is not used: its checks name A7 IV
@@ -27,7 +27,7 @@ DESC, UNIT, CLIP, COMB = 0x38393C + 0xA02C, 0x38389C + 0xA02C, 0x38BBDC, 0x2D32B
 hx = lambda b: ", ".join("0x%02x" % x for x in b)
 
 
-def sites_header(name="ogsq_s3_v2"):
+def sites_header(name="ogsq_s3_v3"):
     d = json.loads((DES / f"{name}.json").read_text(encoding="utf8"))
     image = (EX / "nflasha8/cpapp-b.bin").read_bytes()
     assert d["artifact_sha256"] == hashlib.sha256(image).hexdigest() and d["mode_id"] == "0x8c0"
@@ -46,11 +46,12 @@ def sites_header(name="ogsq_s3_v2"):
     sr = d["stored_record"]
     r_stock, r_new = bytes.fromhex(sr["stock"]), bytes.fromhex(sr["design"])
     offs = [k for k in range(0x15C) if r_stock[k] != r_new[k]]
-    assert len(r_stock) == len(r_new) == 0x15C and offs[:2] == [6, 7] and r_stock[6] == r_stock[7] == 1 and 2 < len(offs) <= 32
+    assert len(r_stock) == len(r_new) == 0x15C and offs[:2] == [6, 7] and r_stock[6] == r_stock[7] == 1 and 2 < len(offs) <= 128
     out += ["static const unsigned short rec_offs[%d] = { %s };" % (len(offs), ", ".join("0x%x" % k for k in offs)),
             "static const u8 rec_stock[%d] = { %s };" % (len(offs), hx(bytes(r_stock[k] for k in offs))),
             "static const u8 rec_new[%d] = { %s };" % (len(offs), hx(bytes(r_new[k] for k in offs))),
             "#define REC_BYTES %d" % len(offs),
+            '#define SITES_TEXT "%d"' % len(sites), '#define ALL_TEXT "%d"' % (len(sites) + 1),
             "/* offs: null for a site whose `length` bytes all change; else the offsets, inside `length` bytes, of the noffs bytes that change. */",
             "struct cp_site { u64 address; u32 length; const u8 *stock; const u8 *changed; const unsigned short *offs; u32 noffs; };",
             "static const struct cp_site cp_sites[] = {"] + rows + ["};"]
