@@ -1,5 +1,5 @@
 {
- "label": "s3read_v2",
+ "label": "s3read_v3",
  "cp_lo": 786432,
  "cp_hi": 34603008,
  "avcam_phys": 17196646400,
@@ -162,6 +162,26 @@
    "bootlog",
    "0xc0000",
    8
+  ],
+  [
+   "context",
+   "0x11a3000",
+   4
+  ],
+  [
+   "resizework",
+   "0x11b5000",
+   1
+  ],
+  [
+   "resizestate",
+   "0x13ff000",
+   4
+  ],
+  [
+   "wbuf",
+   "0x119a000",
+   2
   ]
  ],
  "designs": {

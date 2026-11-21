@@ -15,13 +15,19 @@ ROOT = HERE.parents[2]
 EX = ROOT / "work/extracted/a7s3_501/0700_part_image/dev"
 DES = ROOT / "modding/designs"
 BASE = 0x108000
-LABEL = "s3read_v2"
+LABEL = "s3read_v3"
 CP_LO, CP_HI = 0xC0000, 0x2100000                     # coprocessor addresses a read may have: its logs (tomco.txt), image and RAM tables
 AVCAM_PHYS, AVCAM_RESERVE = 0x401000000, "@0x401000000"   # as on the A7 IV (memrsv=0x01000000@0x401000000:ex); checked on the camera before any read
 ID_FILES = {"/libmpr.so": "nflasha15/lib/libmpr.so", "/libsencore.so": "nflasha15/lib/libsencore.so", "/libJiritsu.so": "nflasha15/lib/libJiritsu.so"}
 ID_PAGES = (0x128000, 0x4A8000, 0x86D000, 0xB11000)   # code pages (0x86d000 holds the sensor object's set-up) and a constant-data page
 DUMP_RANGES = (("shadow", 0x1019000, 2), ("matrix", 0xF2E000, 3), ("sizetable", 0x13EC000, 1), ("records", 0x1FE0000, 4),
-               ("kprint", 0xE0000, 32), ("bootlog", 0xC0000, 8))
+               ("kprint", 0xE0000, 32), ("bootlog", 0xC0000, 8),
+               # v3, after the first write test: where the second scaler's numbers live. Addresses by the code that builds them, against
+               # the A7 IV's (modding/A7S3_PORT.md section 13): the camera core's saved records 0x11a3190 / 0x11a31c8 and its context
+               # just after them (A7 IV 0x11cf800, 0x11cf838, context 0x11d0680), the resize working structure 0x11b5c40 (0x11e1510),
+               # the resize result, division block 0x1400888 and module settings 0x1401ff8 (0x145091c, 0x1450d70, 0x1452488), and the
+               # write-buffer ring 0x119a208 (0x11c6878)
+               ("context", 0x11A3000, 4), ("resizework", 0x11B5000, 1), ("resizestate", 0x13FF000, 4), ("wbuf", 0x119A000, 2))
 
 
 def c_bytes(b):

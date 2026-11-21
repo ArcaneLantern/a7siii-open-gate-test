@@ -34,8 +34,8 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "b4a05b3ae203d2ba9989bc5dd4c0bf4952d54459601ecf62e1a954af12fc3346"),
-        "dump": ("libJit_s3_dump.so", "94665d399b40ad812a5f1bcd02a655e36e74a637b91f343bdae7c3034b9b6398")}
+PINS = {"check": ("libJit_s3_check.so", "7e8793bd7b9d74cbc99e5f1347f559b3eedf92d71e85e86a3bf1f57d204b3bb9"),
+        "dump": ("libJit_s3_dump.so", "fd15e395100a5a82556803ef7625e1b76c6d4c7147d7e84e307df6b9c16de826")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
@@ -160,6 +160,40 @@ def decode_pages(pages):
     t = mem(int(ref["size_table_address"], 16), 128)
     if t is not None:
         out["size_table"] = [list(struct.unpack_from("<HHI", t, 8 * k)) for k in range(16)]
+    # v3: the second scaler's state. The A7 IV's layouts at the addresses matched for this build; the three "predicted" addresses are the
+    # A7 IV's distance from the division block and are NOT confirmed, so every place where a picture size of interest occurs is listed too.
+    st = {}
+    blk = mem(0x1400434, 0x20)                    # A7 IV 0x145091c: in w, in h, start x, y, w-1, h-1, start fractions, size fractions (u16)
+    if blk is not None:
+        w = struct.unpack_from("<10H", blk)
+        st["second_scaler_block_predicted_0x1400434"] = {"words": list(w), "start": [round(w[2] + w[6] / 4096, 3), round(w[3] + w[7] / 4096, 3)],
+                                                        "size": [round(w[4] + w[8] / 4096, 3), round(w[5] + w[9] / 4096, 3)]}
+    inp = mem(0x1400470, 8)                       # A7 IV 0x1450958
+    if inp is not None:
+        st["second_scaler_input_predicted_0x1400470"] = list(struct.unpack_from("<4H", inp))
+    ws = mem(0x11B5C40, 0xDC)                     # A7 IV 0x11e1510: pixel aspect +0x48, scales +0x4c / +0x50 (Q12), zoom +0x24 (Q16)
+    if ws is not None:
+        st["resize_work_0x11b5c40"] = {"pixel_aspect_q12": struct.unpack_from("<i", ws, 0x48)[0], "scale_h_q12": struct.unpack_from("<i", ws, 0x4C)[0],
+                                       "scale_v_q12": struct.unpack_from("<i", ws, 0x50)[0], "zoom_q16": struct.unpack_from("<i", ws, 0x24)[0], "head": ws[:0x60].hex()}
+    se = mem(0x1401FF8, 0x20)                     # A7 IV 0x1452488: +0x10 flags, +0x18 / +0x1a units
+    if se is not None:
+        st["resize_settings_0x1401ff8"] = se.hex()
+    dv = mem(0x1400888, 0x5A0)                    # A7 IV 0x1450d70: per unit, stride 0x150: +0xc in start, +0x10 in width, +0x20 out width
+    if dv is not None:
+        st["division_units_0x1400888"] = [{"in_start": struct.unpack_from("<I", dv, k * 0x150 + 0xC)[0], "in_width": struct.unpack_from("<I", dv, k * 0x150 + 0x10)[0],
+                                           "out_width": struct.unpack_from("<I", dv, k * 0x150 + 0x20)[0]} for k in range(4)]
+    seen = {}
+    pairs = {(4240, 2832), (4240, 2392), (4240, 2385), (4240, 2848), (4240, 2408), (3840, 2560), (3840, 2160), (1920, 1080), (2144, 2392), (2096, 2392), (2176, 2408)}
+    for addr, (name, blob) in sorted(pages.items()):
+        if name not in ("context", "resizework", "resizestate"):
+            continue
+        for o in range(0, 4096 - 3, 2):
+            p = struct.unpack_from("<HH", blob, o)
+            if p in pairs:
+                seen.setdefault("%dx%d" % p, []).append(hex(addr + o))
+    st["where_sizes_occur"] = {k: v[:40] for k, v in sorted(seen.items())}
+    if any(n in ("context", "resizework", "resizestate") for n, _ in pages.values()):
+        out["scaler_state"] = st
     return out
 
 
@@ -182,7 +216,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v2 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v3 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:
@@ -282,6 +316,21 @@ def report(session, facts, which):
             lines.append("  mode 0x8c0: %d bytes differ from the emulation at %s" % (v["bytes_differing_from_emulation"], ", ".join(v["offsets"])))
         if d.get("size_table"):
             lines.append("movie size table: " + "; ".join("%dx%d id %#x" % tuple(r) for r in d["size_table"]))
+        ss = d.get("scaler_state")
+        if ss:
+            lines.append("second scaler state (addresses matched to the A7 IV's; the two 'predicted' ones are not confirmed):")
+            b = ss.get("second_scaler_block_predicted_0x1400434")
+            if b:
+                lines.append("  block: words %s -> takes %s x %s from %s" % (b["words"], b["size"][0], b["size"][1], b["start"]))
+            if "second_scaler_input_predicted_0x1400470" in ss:
+                lines.append("  input words: %s" % ss["second_scaler_input_predicted_0x1400470"])
+            rw = ss.get("resize_work_0x11b5c40")
+            if rw:
+                lines.append("  resize work: pixel aspect %d/4096, scales %d and %d /4096, zoom %d/65536" % (rw["pixel_aspect_q12"], rw["scale_h_q12"], rw["scale_v_q12"], rw["zoom_q16"]))
+            if "division_units_0x1400888" in ss:
+                lines.append("  division units: %s" % ss["division_units_0x1400888"])
+            for k, v in ss.get("where_sizes_occur", {}).items():
+                lines.append("  %s at %s%s" % (k, ", ".join(v[:10]), " ..." if len(v) > 10 else ""))
     session.save_bytes("s3_report.txt", ("\n".join(lines) + "\n").encode())
     for ln in lines[:8] + lines[-6:]:
         session.say(ln)

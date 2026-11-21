@@ -1,5 +1,7 @@
 # A7S III open gate: test kit (firmware 5.01)
 
+<p><b>The current write tests are UNTESTED</b> they only write to ram, so should remove themselves and return the camera to stock with a battery pull, but they are again, not tested yet.</p?
+
 This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S III (ILCE-7SM3). The goal is a true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only and gone after a battery pull.
 
 **Where it stands (2026-11-22):**
@@ -54,13 +56,16 @@ What they do to the camera: they switch it to service mode, write one small prog
 3. Connect USB and run `windows/open_gate_apply.cmd`. It starts only if your newest saved check or dump says READY. It asks for the firmware version and for a typed YES.
 4. It runs three steps. Between steps it asks you to **unplug and replug the USB cable. Do not switch the camera off and do not pull the battery** until it says all three steps passed.
 5. Unplug USB. Turn the dial to movie. Look at the picture. Record 5 to 10 seconds, stop, and play the clip back.
-6. To return to stock: battery out for 10 seconds. (`open_gate_putback.cmd` does the same in three steps without a power cut.)
+6. **Leave the dial on movie**, connect USB and run `windows/dump_info.cmd`. With the patch applied, this dump reads the numbers the camera's scaler is actually using, which is what tells us whether the full sensor area reaches the file.
+7. To return to stock: battery out for 10 seconds. (`open_gate_putback.cmd` does the same in three steps without a power cut.)
 
 **Please send back**
 
 - The zipped `windows/camera_private` folder.
-- The clip, or at least its resolution as a computer reports it (hoped for: 3840 × 2560).
+- The patched clip.
 - What you saw: a normal picture, a squeezed one, a cropped one, grey lines, a restart, a freeze.
+
+**For judging the framing** (the first test recorded 3840 × 2560, but which part of the sensor it holds is not settled): from a tripod, same lens, focus and scene, please also send a stills photo (the full 3:2 sensor area) and a few seconds of stock 4K 24p recorded after a battery pull. Comparing the patched clip with another video mode while the patch is applied does not work: the patch changes sensor settings that the other 4K modes share.
 
 **If the camera misbehaves** (grey lines, restart, freeze, recording that stops by itself): do not pull the battery straight away if the camera still responds. Connect USB, run `dump_info.cmd`, and send the folder: the camera's own log of what went wrong is lost with the battery pull. Then pull the battery for 10 seconds. If the camera does not respond at all, just pull the battery.
 

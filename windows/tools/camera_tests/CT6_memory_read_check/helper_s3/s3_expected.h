@@ -246,7 +246,7 @@ static const unsigned char B240[] = {112,8};
 static const unsigned char B241[] = {0,10};
 static const unsigned char B242[] = {112,8,0,0};
 static const unsigned char B243[] = {0,10,0,0};
-#define S3_LABEL "s3read_v2"
+#define S3_LABEL "s3read_v3"
 #define CP_LO 0xc0000U
 #define CP_HI 0x2100000U
 #define AVCAM_PHYS 0x401000000UL
@@ -412,5 +412,9 @@ static const struct dump_range dump_ranges[] = {
     {"records", 0x1fe0000, 4},
     {"kprint", 0xe0000, 32},
     {"bootlog", 0xc0000, 8},
+    {"context", 0x11a3000, 4},
+    {"resizework", 0x11b5000, 1},
+    {"resizestate", 0x13ff000, 4},
+    {"wbuf", 0x119a000, 2},
 };
 #endif

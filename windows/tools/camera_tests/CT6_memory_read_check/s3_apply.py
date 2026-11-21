@@ -61,7 +61,7 @@ def last_check():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = "s3read_v2 " in f.get("header", "")
+            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 "))
             return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
     return None
 
