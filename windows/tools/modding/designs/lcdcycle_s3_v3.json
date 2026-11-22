@@ -1,13 +1,13 @@
 {
- "design": "lcdcycle_s3_v2",
- "title": "A7S III 5.01: C3 steps the rear-screen and viewfinder preview 3:2 -> 2:1 -> 2.4:1 in movie mode and keeps the focus frames: the picture-ratio constants and the frame widgets' expected rectangle, written from appFw",
- "generated_by": "build/build_lcdcycle_s3_v2.py",
+ "design": "lcdcycle_s3_v3",
+ "title": "A7S III 5.01: C3 steps the rear-screen and viewfinder preview 3:2 -> 2:1 -> 2.25:1 -> 2.4:1 in movie mode and keeps the focus frames: the picture-ratio constants and the frame widgets' expected rectangle, written from appFw",
+ "generated_by": "build/build_lcdcycle_s3_v3.py",
  "library": "appFw.so",
  "artifact_sha256": {
   "appFw.so": "eba89299273542e9de89d64f3bd380114b2b9df67a246a6927cd7a83f2043781"
  },
  "coprocessor_image_sha256": "63122fceaeed8934258dba414bb215e4fc48631860eb6537e1b0c84cbe5d6843",
- "replaces": "lcdcycle_s3_v1 (ran on an A7S III 2026-11-22: C3 worked, 2:1 and 2.4:1 as designed, but its 3:2 state showed the stock 16:9 letterbox)",
+ "replaces": "lcdcycle_s3_v2 (works on an A7S III, 2026-11-22: 3:2, 2:1 and 2.4:1); v3 adds the 2.25:1 state and changes nothing else",
  "write_order": "the patches in the listed order to apply (cave, then the hook); the reverse order to put back",
  "trigger": "0x2150006",
  "ignored_event": "0x20f00be",
@@ -18,12 +18,12 @@
  },
  "cave": {
   "from": "0x5028360",
-  "bytes": 1456,
+  "bytes": 1472,
   "zero_bytes_end": "0x5028800",
   "page_end": "0x5029000",
   "inside_zero_bytes": false
  },
- "step_routine": "build/lcdcycle_s3_v2/step.c at 0x50283b0 (1364 bytes)",
+ "step_routine": "build/lcdcycle_s3_v3/step.c at 0x50283b0 (1380 bytes)",
  "stub_bytes": 80,
  "lines": [
   {
@@ -32,7 +32,7 @@
    "first_site_word": "0x1e4f98",
    "words": 2,
    "guards": 3,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T0",
@@ -40,7 +40,7 @@
    "first_site_word": "0xd4d75c",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T1",
@@ -48,7 +48,7 @@
    "first_site_word": "0xd4d7ac",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T2",
@@ -56,7 +56,7 @@
    "first_site_word": "0xd4d7d4",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T3",
@@ -64,7 +64,7 @@
    "first_site_word": "0xd4d824",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T4",
@@ -72,7 +72,7 @@
    "first_site_word": "0xd4d84c",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   },
   {
    "name": "T5",
@@ -80,11 +80,18 @@
    "first_site_word": "0xd4d89c",
    "words": 2,
    "guards": 4,
-   "candidates": 4
+   "candidates": 5
   }
+ ],
+ "cycle": [
+  "3:2",
+  "2:1",
+  "2.25:1",
+  "2.4:1"
  ],
  "states": {
   "3:2": {
+   "for": "normal lenses",
    "height": "width x 2/3",
    "constants": [
     "0xe02f04f",
@@ -96,9 +103,10 @@
     640,
     428
    ],
-   "on_an_800x600_panel": "534 rows from row 33"
+   "on_an_800x600_panel": "534 rows from row 33, 1.498 : 1"
   },
   "2:1": {
+   "for": "1.33x anamorphic",
    "height": "width x 1/2",
    "constants": [
     "0xe01f04f",
@@ -110,9 +118,25 @@
     640,
     320
    ],
-   "on_an_800x600_panel": "400 rows from row 100"
+   "on_an_800x600_panel": "400 rows from row 100, 2.000 : 1"
+  },
+  "2.25:1": {
+   "for": "1.5x anamorphic",
+   "height": "width x 4/9",
+   "constants": [
+    "0xe04f04f",
+    "0x2009bf08"
+   ],
+   "frame_rectangle": [
+    0,
+    98,
+    640,
+    284
+   ],
+   "on_an_800x600_panel": "354 rows from row 123, 2.260 : 1"
   },
   "2.4:1": {
+   "for": "1.6x anamorphic",
    "height": "width x 5/12",
    "constants": [
     "0xe05f04f",
@@ -124,9 +148,10 @@
     640,
     266
    ],
-   "on_an_800x600_panel": "332 rows from row 134"
+   "on_an_800x600_panel": "332 rows from row 134, 2.410 : 1"
   },
   "16:9 (stock)": {
+   "for": "the camera's own 4K standby picture",
    "height": "width x 9/16",
    "constants": [
     "0xe09f04f",
@@ -138,7 +163,7 @@
     640,
     360
    ],
-   "on_an_800x600_panel": "450 rows from row 75"
+   "on_an_800x600_panel": "450 rows from row 75, 1.778 : 1"
   }
  },
  "frame_rectangles": {
@@ -150,17 +175,17 @@
    "0xd4d84c",
    "0xd4d89c"
   ],
-  "note": "{x, y, w, h} u16 in a 640x480 grid, rows 0 (rear panel of type 0) and 2 (viewfinder), column 3 (16:9 picture) of the three tables; the widgets accept 5 units either way"
+  "note": "{x, y, w, h} u16 in a 640x480 grid, rows 0 (rear panel) and 2 (viewfinder), column 3 (16:9 picture) of the three tables; the widgets accept 5 units either way"
  },
  "goes_with": [
   "the A7S III open-gate state (ogsq_s3_v5, outsz2560_s3_v1, ogfile2560_hs_s_s3_v1)",
-  "lcdratio32_s3_v1 (sets the 3:2 state without a press; without it the first press does)"
+  "lcdratio32_s3_v1 (sets the 3:2 state without a press)"
  ],
  "not_checked": [
-  "on a camera: this design has not run (v1's hook, calls and transfers have)",
-  "the panel-type bytes and which table row the rear panel's widgets use"
+  "on a camera: v3 has not run (v2 has)",
+  "the focus frames in the 2.25:1 state"
  ],
- "note": "put back (level 20) removes the code; the coprocessor words stay in the mode last chosen until a cold boot",
+ "note": "put back (level 20) removes the code; the coprocessor words stay in the mode last chosen until the camera is switched off",
  "patches": [
   {
    "binary": "appFw.so",
@@ -408,7 +433,7 @@
    "file_off": "0x50284e0",
    "va": "0x50284e0",
    "old": "00000000000000000000000000000000",
-   "new": "4a0000941f0c0071080300541f040071",
+   "new": "4a0000941f100071080300541f080071",
    "code": true,
    "note": "cave bytes 0x50284e0-0x50284f0"
   },
@@ -768,7 +793,7 @@
    "file_off": "0x5028720",
    "va": "0x5028720",
    "old": "00000000000000000000000000000000",
-   "new": "420943fa4a050091a3fdff547f260071",
+   "new": "420944fa4a050091a3fdff547f260071",
    "code": true,
    "note": "cave bytes 0x5028720-0x5028730"
   },
@@ -918,7 +943,7 @@
    "file_off": "0x5028810",
    "va": "0x5028810",
    "old": "e8006e010000000024016e0100000000",
-   "new": "65762f6d656d0000804f1e0006030402",
+   "new": "65762f6d656d0000804f1e0006030502",
    "code": true,
    "note": "cave bytes 0x5028810-0x5028820 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -928,7 +953,7 @@
    "file_off": "0x5028820",
    "va": "0x5028820",
    "old": "80016e010000000070026e0100000000",
-   "new": "0006000040d7d400070404020e160000",
+   "new": "0006000040d7d4000704050210180000",
    "code": true,
    "note": "cave bytes 0x5028820-0x5028830 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -938,7 +963,7 @@
    "file_off": "0x5028830",
    "va": "0x5028830",
    "old": "ac026e0100000000ec026e0100000000",
-   "new": "80d7d4000b0404021e160000c0d7d400",
+   "new": "80d7d4000b04050222180000c0d7d400",
    "code": true,
    "note": "cave bytes 0x5028830-0x5028840 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -948,7 +973,7 @@
    "file_off": "0x5028840",
    "va": "0x5028840",
    "old": "28036e0100000000e0056e0100000000",
-   "new": "050404020e16000000d8d40009040402",
+   "new": "050405021018000000d8d40009040502",
    "code": true,
    "note": "cave bytes 0x5028840-0x5028850 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -958,7 +983,7 @@
    "file_off": "0x5028850",
    "va": "0x5028850",
    "old": "94076e0100000000cc076e0100000000",
-   "new": "1e16000040d8d400030404020e160000",
+   "new": "2218000040d8d4000304050210180000",
    "code": true,
    "note": "cave bytes 0x5028850-0x5028860 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -968,7 +993,7 @@
    "file_off": "0x5028860",
    "va": "0x5028860",
    "old": "14086e01000000006c086e0100000000",
-   "new": "80d8d400070404021e160000ffffffff",
+   "new": "80d8d4000704050222180000ffffffff",
    "code": true,
    "note": "cave bytes 0x5028860-0x5028870 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -998,7 +1023,7 @@
    "file_off": "0x5028890",
    "va": "0x5028890",
    "old": "f00e6e010000000068116e0100000000",
-   "new": "08bf02204ff0050e08bf0c204ff0090e",
+   "new": "08bf02204ff0040e08bf09204ff0050e",
    "code": true,
    "note": "cave bytes 0x5028890-0x50288a0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1008,7 +1033,7 @@
    "file_off": "0x50288a0",
    "va": "0x50288a0",
    "old": "fc116e010000000044126e0100000000",
-   "new": "08bf1020feffffff6a000000ffffffff",
+   "new": "08bf0c204ff0090e08bf1020feffffff",
    "code": true,
    "note": "cave bytes 0x50288a0-0x50288b0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1018,7 +1043,7 @@
    "file_off": "0x50288b0",
    "va": "0x50288b0",
    "old": "6c3d6e010000000084486e0100000000",
-   "new": "ac01ac01020000000000470003000000",
+   "new": "6a000000ffffffffac01ac0102000000",
    "code": true,
    "note": "cave bytes 0x50288b0-0x50288c0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1028,7 +1053,7 @@
    "file_off": "0x50288c0",
    "va": "0x50288c0",
    "old": "584a6e0100000000f44a6e0100000000",
-   "new": "8002520100001a008002ac0100005000",
+   "new": "00004700030000008002520100001a00",
    "code": true,
    "note": "cave bytes 0x50288c0-0x50288d0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1038,7 +1063,7 @@
    "file_off": "0x50288d0",
    "va": "0x50288d0",
    "old": "744b6e0100000000b04b6e0100000000",
-   "new": "8002400100006b0080020a0100003c00",
+   "new": "8002ac01000050008002400100006200",
    "code": true,
    "note": "cave bytes 0x50288d0-0x50288e0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1048,7 +1073,7 @@
    "file_off": "0x50288e0",
    "va": "0x50288e0",
    "old": "984c6e0100000000204d6e0100000000",
-   "new": "80026801feffffff6a001a00ffffffff",
+   "new": "80021c0100006b0080020a0100003c00",
    "code": true,
    "note": "cave bytes 0x50288e0-0x50288f0 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1058,7 +1083,7 @@
    "file_off": "0x50288f0",
    "va": "0x50288f0",
    "old": "404d6e01000000005c4f6e0100000000",
-   "new": "ac01ac01020000000000470003000000",
+   "new": "80026801feffffff6a001a00ffffffff",
    "code": true,
    "note": "cave bytes 0x50288f0-0x5028900 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
@@ -1068,9 +1093,19 @@
    "file_off": "0x5028900",
    "va": "0x5028900",
    "old": "cc4f6e0100000000f44f6e0100000000",
-   "new": "80025201000000000000000000000000",
+   "new": "ac01ac01020000000000470003000000",
    "code": true,
    "note": "cave bytes 0x5028900-0x5028910 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
+  },
+  {
+   "binary": "appFw.so",
+   "kind": "cave",
+   "file_off": "0x5028910",
+   "va": "0x5028910",
+   "old": "38516e0100000000b0516e0100000000",
+   "new": "80025201000000000000000000000000",
+   "code": true,
+   "note": "cave bytes 0x5028910-0x5028920 (past the zero bytes: the old bytes are the page's copy of the data segment's start)"
   },
   {
    "binary": "appFw.so",

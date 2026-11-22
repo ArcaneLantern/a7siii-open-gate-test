@@ -237,3 +237,13 @@ Not known until it runs: that the rear panel reports the 3:2 panel code on this 
 
 A second look at the firmware for the live-view fault ruled out two suspects: the exposure registers of the sensor's phase-detect stream (they sit at their defaults in a wrong-picture dump, but also in a right-picture one), and a second set of picture records (the selector at `0x256128` returns one pair per mode). It also found that a start of the picture and a live mode switch reach a sensor mode by different code paths (`dfeImagerPowerCtrl.cpp`, power levels at `0xf39f08`, mode set without and with the link update at `0x335a94`).
 
+## The screen steps on the camera, and the default state (2026-11-23)
+
+**The corrected screen steps work.** The tester's movie live view is 3:2 instead of the squeezed 16:9, and C3 steps the preview. The dump of that run read the two panel-type bytes: rear screen 2, viewfinder 2, both 4:3 panels. It also shows the ratio constants at 2/3 and the frame-table rows of the rear panel and the viewfinder at (0, 26, 640, 428).
+
+**The default state is now five steps:** `ogsq_s3_v5`, `outsz2560_s3_v1`, `ogfile2560_hs_s_s3_v1`, `lcdratio32_s3_v1` and the C3 routine, followed by the closing read-only session.
+
+**C3 routine v3** (`lcdcycle_s3_v3`) adds a fourth state, 2.25:1 for 1.5x anamorphic lenses: constants 4/9, frame rectangle (0, 98, 640, 284), 354 of 600 rows. Nothing else differs from v2, which is the routine that ran. v3 has not run on a camera.
+
+**The live-view fault, corrected description.** It is not a first-entry fault. The live view is glitchy, purple with the lower part black, on every entry into movie mode from stills. That includes the entry after the last apply session, because that session began with the dial on stills. It is right after a start of the picture in movie mode and after a record start, until the next visit to stills. The look is the one sensor step v2 gave, where the sensor delivered its 16:9 band into a full-height pipeline. Our reading, not shown: on a live switch from the stills live view the sensor does not take up the full-height mode, which the stock firmware only enters through its capture sequence. There is no other fast full-width, full-height sensor mode to use instead.
+

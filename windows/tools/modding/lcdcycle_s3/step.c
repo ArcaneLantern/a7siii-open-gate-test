@@ -1,4 +1,6 @@
-/* lcdcycle_s3_v2: the step routine that the C3 hook in the A7S III 5.01 appFw.so calls (build/build_lcdcycle_s3_v2.py).
+/* lcdcycle_s3_v3: the step routine that the C3 hook in the A7S III 5.01 appFw.so calls (build/build_lcdcycle_s3_v3.py).
+ * It is lcdcycle_s3_v2, which works on the camera (2026-11-22: 3:2, 2:1 and 2.4:1 on the 4:3 screen), with one more state in the
+ * cycle: 2.25:1 for 1.5x anamorphic lenses. Only the number of cycle states and the tables in pool.h differ from v2.
  * Freestanding, position independent: every call is a PC-relative `bl` to an appFw address given to the linker, or through a pointer
  * that dlsym returned.
  *
@@ -6,8 +8,8 @@
  * rear-screen preview). Its 3:2 state was wrong for this camera: it relied on the fit word of a 3:2 panel, and this camera's rear
  * panel is a 4:3 one, where a 16:9 picture is always letterboxed and only the picture-ratio constants decide its height.
  *
- * So in v2 the three states are three pairs of constants, and the fit word is not touched. In movie mode, one C3 press steps
- *   3:2 (height = width x 2/3) -> 2:1 (x 1/2, 1.33x anamorphic) -> 2.4:1 (x 5/12, 1.6x anamorphic) -> 3:2
+ * So the states are pairs of constants, and the fit word is not touched. In movie mode, one C3 press steps
+ *   3:2 (height = width x 2/3) -> 2:1 (x 1/2, 1.33x anamorphic) -> 2.25:1 (x 4/9, 1.5x) -> 2.4:1 (x 5/12, 1.6x) -> 3:2
  * and from the stock constants (9/16: the screen step lcdratio32_s3_v1 not applied) a press goes to 3:2. With them it writes the
  * rectangle the coprocessor's frame widgets expect for a 16:9 picture on a 4:3 panel ({x, y, w, h} u16 in a 640x480 grid), in the
  * rows of the rear panel and of the viewfinder of their three tables. Then it asks VDF for a fresh layout (appFw's
@@ -32,7 +34,7 @@ typedef u32 (*xfer_t)(u32 dir, u64 src, u64 dst, u32 size);
 
 #define NONE 9u                /* no state / failed */
 #define ANY 8u                 /* any listed candidate may be there */
-#define STATES 3u              /* candidates 0..2 are the cycle; candidate 3 is the stock value, a start state only */
+#define STATES 4u              /* candidates 0..3 are the cycle; candidate 4 is the stock value, a start state only */
 
 /* system calls with only the registers each one needs */
 static inline long sc1(long n, long a)
@@ -126,7 +128,7 @@ int lcd_step(void)
                 /* the state now, from the coprocessor itself: the constants (a cycle state, or the stock pair) */
                 u32 now = upd(&c, D_B, ANY, NONE);
                 if (now <= STATES) {
-                    u32 next = now + 1 >= STATES ? 0 : now + 1;           /* 0 -> 1 -> 2 -> 0; stock (3) -> 0 */
+                    u32 next = now + 1 >= STATES ? 0 : now + 1;           /* 0 -> 1 -> 2 -> 3 -> 0; stock (4) -> 0 */
                     if (upd(&c, D_B, now, next) != NONE) {
                         ok = 1;
                         for (u32 t = D_T0; t <= D_TLAST; t++)             /* the frame tables: best effort, the picture is already changed */

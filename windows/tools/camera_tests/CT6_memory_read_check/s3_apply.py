@@ -1,28 +1,27 @@
 """A7S III (ILCE-7SM3) firmware 5.01: apply, or put back, the open-gate state in the camera's MEMORY.
 
-  python s3_apply.py apply    [--screen] [--dry-run]
-  python s3_apply.py putback  [--screen] [--dry-run]
+  python s3_apply.py apply    [--no-screen] [--dry-run]
+  python s3_apply.py putback  [--no-screen] [--dry-run]
   python s3_apply.py screen | screen-putback  [--dry-run]
   (apply and screen take --no-movie-session to leave out the closing read-only session)
 
-The three open-gate steps worked on one tester's A7S III on 2026-11-22 (a true 3840x2560 file of the whole sensor area).
-The first screen steps ran on that camera the same day: C3 stepped the preview, but the 3:2 state showed 16:9 (this
-camera's rear screen is a 4:3 panel, not the A7 IV's 3:2 one). THE CORRECTED SCREEN STEPS IN THIS KIT HAVE NOT RUN YET.
+THE DEFAULT STATE OF THE A7S III (the owner, 2026-11-23): open gate with the screen steps. On one tester's camera
+(2026-11-22) it records a true 3840x2560 file of the whole sensor area, the rear screen shows the picture at 3:2, and
+C3 steps the preview. New in this kit and not run yet: a fourth C3 preview, 2.25:1 for 1.5x lenses.
 
-  apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
-           L19 encoder side (ogfile2560_hs_s_s3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
-           With --screen two more: S16 rear screen and viewfinder at 3:2 with the focus frames (lcdratio32_s3_v1), C19 the C3
-           key steps the preview 3:2 -> 2:1 -> 2.4:1 in movie mode (lcdcycle_s3_v2). A step that finds its bytes already
-           applied says NOTHING TO DO and counts as passed, so this also adds the screen steps to an applied open gate.
-  putback  the reverse, L20, L17, L6 (with --screen: C20, S17 first). A cold boot (battery out for 10 seconds) also
-           undoes everything.
-  screen / screen-putback   only the two screen steps (S16, C19) or their put back (C20, S17). Put back needs the
-           preview at 3:2: press C3 until it is. The words C3 wrote stay as they are until a cold boot otherwise.
+  apply    five steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
+           L19 encoder side (ogfile2560_hs_s_s3_v1), S16 rear screen and viewfinder at 3:2 with the focus frames
+           (lcdratio32_s3_v1), C19 the C3 key steps the preview 3:2 -> 2:1 -> 2.25:1 -> 2.4:1 in movie mode
+           (lcdcycle_s3_v3). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only. With --no-screen only the first three.
+           A step that finds its bytes already applied says NOTHING TO DO and counts as passed.
+  putback  the reverse: C20, S17, L20, L17, L6 (with --no-screen the last three). The screen part needs the preview
+           at 3:2: press C3 until it is. A cold boot (battery out for 10 seconds) also undoes everything.
+  screen / screen-putback   only the two screen steps (S16, C19) or their put back (C20, S17).
 
-The closing session (apply and screen). The first time movie mode is entered after the steps, the live view is glitchy; a
-read-only dump session taken with the dial on movie, or the start of a recording, corrected it in every test, and after that it
-stays right across switches to stills and back (the tester, 2026-11-22). So the script ends by asking for the dial on MOVIE and
-an unplug and replug, and runs the read-only dump itself. Nothing is written in that session.
+The closing session (apply and screen). After the steps, the live view is glitchy (purple, lower part black) whenever
+movie mode is entered from stills; a read-only dump session taken with the dial on movie, or the start of a recording,
+corrects it until the next switch from stills (the tester, 2026-11-22). So the script ends by asking for the dial on
+MOVIE and an unplug and replug, and runs the read-only dump itself. Nothing is written in that session.
 
 Rules it keeps:
 - It starts only if the newest saved read-only check of this kit says VERDICT READY.
@@ -137,7 +136,7 @@ def movie_session():
     """The closing read-only session, taken with the dial on movie: the camera starts its picture in movie mode when it ends."""
     say()
     say("=" * 78)
-    say("One more session, and it only READS. It is what corrected the glitchy first live view in every test so far.")
+    say("One more session, and it only READS. It is what corrected the glitchy live view after the apply in every test so far.")
     say(">>> 1. Turn the mode dial to MOVIE (File Format XAVC HS 4K or XAVC S 4K, 24p).")
     say(">>> 2. Unplug the USB cable. Look at the rear screen for five seconds and remember it: right, or glitchy?")
     say(">>> 3. Plug the USB cable in again.")
@@ -162,8 +161,9 @@ def movie_session():
     if column != 1:                                  # the open-gate 4K 24p mode runs sensor register column 1
         say("NOTE: before this session the sensor was not in the open-gate 4K 24p mode (register column %s, not 1)." % column)
         say("      Was the dial on movie, at 4K 24p? If not: set it, replug, and run dump_info once more.")
-    say(">>> Unplug USB now. The live view should be right, and it should stay right when you go to stills and back.")
-    say("    If it is glitchy all the same: start and stop a short recording. Please tell us which it was, and what you saw in step 2.")
+    say(">>> Unplug USB now. The live view should be right.")
+    say("    Whenever you come back to movie mode from stills it is glitchy again (purple, lower part black): start and stop a")
+    say("    short recording, and it is right until the next visit to stills. We have not found the cause of this yet.")
 
 
 def step_outcome():
@@ -177,16 +177,17 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=sorted(STEPS))
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
-    ap.add_argument("--screen", action="store_true", help="with apply or putback: the two rear-screen steps as well (3:2 screen, C3 preview cycle)")
+    ap.add_argument("--no-screen", action="store_true", help="with apply or putback: only the three open-gate steps, without the two screen steps")
+    ap.add_argument("--screen", action="store_true", help="accepted and ignored: the screen steps are part of apply and putback now")
     ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session with the dial on movie")
     a = ap.parse_args()
     steps = STEPS[a.what]
-    if a.screen:
-        if a.what not in ("apply", "putback"):
-            raise SystemExit("--screen goes with apply or putback. Nothing was sent.")
+    if a.no_screen and a.what not in ("apply", "putback"):
+        raise SystemExit("--no-screen goes with apply or putback. Nothing was sent.")
+    with_screen = not a.no_screen
+    if a.what in ("apply", "putback") and with_screen:
         steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
     applying = a.what in ("apply", "screen")
-    with_screen = a.screen or a.what.startswith("screen")
     for k in steps:                                  # every library must be the pinned one before anything starts
         name, sha, _ = s3_run.WRITE_STEPS[k]
         p = s3_run.S3 / name
@@ -196,7 +197,7 @@ def main():
     for n, k in enumerate(steps, 1):
         say("  %d. %s  %s  (library %s...)" % (n, k, s3_run.WRITE_STEPS[k][2], s3_run.WRITE_STEPS[k][1][:16]))
     if applying and not a.no_movie_session:
-        say("  then one read-only session (dump) with the dial on movie: it corrects the glitchy first live view. Nothing is written in it.")
+        say("  then one read-only session (dump) with the dial on movie: it corrects the glitchy live view after the apply. Nothing is written in it.")
     if a.dry_run:
         for k in steps:
             say()
@@ -213,10 +214,10 @@ def main():
     say()
     say("This WRITES into the running camera's memory (not its firmware, not its settings).")
     if applying:
-        say("The three open-gate steps have worked on one A7S III (2026-11-22)." if a.what == "apply" else "This adds the two screen steps to an applied open-gate state.")
+        say("The open-gate steps and the screen steps have worked on one A7S III (2026-11-22)." if a.what == "apply" else "This adds the two screen steps to an applied open-gate state.")
         if with_screen:
-            say("THE TWO SCREEN STEPS IN THIS KIT HAVE NOT RUN ON A CAMERA YET. They are the corrected ones for this camera's 4:3 rear screen.")
-            say("If the first screen steps (the kit of 2026-11-22 morning) are still in the camera's memory: pull the battery for 10 seconds first.")
+            say("New in this kit, not run on a camera yet: a fourth C3 preview, 2.25:1 for 1.5x lenses (the C3 step is a new build).")
+            say("If screen steps of an earlier kit are still in the camera's memory: switch the camera off and on, or pull the battery, first.")
     else:
         say("It has to follow an apply of this kit.")
     say("A cold boot (battery out for 10 seconds) returns the camera to stock. On the tester's camera the power switch did too:")
@@ -253,7 +254,7 @@ def main():
     if with_screen and applying:
         say("The screen steps: in movie mode the rear screen and the viewfinder should now show the whole picture at 3:2,")
         say("  with thin black bars above and below (the screen is 4:3). A circle should look round.")
-        say("  C3 in movie mode steps the preview: 3:2 -> 2:1 (1.33x anamorphic) -> 2.4:1 (1.6x anamorphic) -> 3:2. The file does not change.")
+        say("  C3 in movie mode steps the preview: 3:2 -> 2:1 (1.33x) -> 2.25:1 (1.5x) -> 2.4:1 (1.6x) -> 3:2. The file does not change.")
         say("  While they are applied C3 does nothing else in movie mode, and every 16:9 picture is shown at the chosen shape (other movie formats look squeezed).")
         say("  Please report: the screen in each of the three modes, the focus frames in each, the viewfinder, and anything C3 does that is not this.")
         say("  The closing session below saves a dump that reads the display tables: leave the preview at 3:2 for it.")

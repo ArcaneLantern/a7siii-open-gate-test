@@ -9,7 +9,7 @@ only their tables differ. This writes, into helper/, in the formats helper/gen_e
   expected_mp_ogfile2560_hs_s_s3_v1.h     levels 19 and 20 (and 18): the encoder-side sites and guards
 and for the rear screen (modding/A7S3_PORT.md section 26), built as separate libraries:
   expected_words_lcdratio32_s3_v1.h       levels 16 and 17: the 3:2 picture-ratio constants and six frame-table entries, with their guards
-  expected_mp_lcdcycle_s3_v2.h            levels 19 and 20: the C3 routine and its hook in appFw.so (code, written in order)
+  expected_mp_lcdcycle_s3_v3.h            levels 19 and 20: the C3 routine and its hook in appFw.so (code, written in order)
 (lcdfill_s3_v1 and lcdcycle_s3_v1, the first screen designs, ran on a camera on 2026-11-22 and are replaced: section 27.)
 Every stock byte is compared with the 5.01 files here. gen_expected.py is not used: its checks name A7 IV
 addresses. The same kinds of check are made below with this build's.
@@ -155,14 +155,14 @@ def mp_header(name="ogfile2560_hs_s_s3_v1"):
     return {b: (sum(1 for e in t if e[1] == 1), sum(1 for e in t if e[1] == 0)) for b, t in tabs.items()}, hex(first), hex(span)
 
 
-def mp_appfw_header(name="lcdcycle_s3_v2"):
+def mp_appfw_header(name="lcdcycle_s3_v3"):
     """An appFw.so design (build/build_lcdcycle_s3.py or its _v2): code sites, written in the design's order (the cave before the branch into it), put
     back in reverse (MP_LM_ORDERED). The format is that of helper/gen_expected.py --mp for the A7 IV's lcdcycle designs. The av-cam.bin
     table holds only the two standard guards, so nothing is written there. Guards in appFw.so: the file's first 16 bytes, the 16 file
     bytes just before the cave, 16 bytes on each side of the hooked instruction, and the first 16 bytes of each function the routine calls."""
     d = json.loads((DES / f"{name}.json").read_text(encoding="utf8"))
     av, lib = (EX / "nflasha3/av-cam.bin").read_bytes(), (EX / "nflasha15/lib/appFw.so").read_bytes()
-    assert d["generated_by"] in ("build/build_lcdcycle_s3.py", "build/build_lcdcycle_s3_v2.py") and d["library"] == "appFw.so" and all(p["binary"] == "appFw.so" and p["code"] for p in d["patches"])
+    assert d["generated_by"] in ("build/build_lcdcycle_s3.py", "build/build_lcdcycle_s3_v2.py", "build/build_lcdcycle_s3_v3.py") and d["library"] == "appFw.so" and all(p["binary"] == "appFw.so" and p["code"] for p in d["patches"])
     assert d["artifact_sha256"] == {"appFw.so": hashlib.sha256(lib).hexdigest()}, "the design was made from another appFw.so"
     g_av = [(UNIT + 0x20, av[UNIT + 0x20:UNIT + 0x30]), (CLIP + 0x50, av[CLIP + 0x50:CLIP + 0x60])]
     assert struct.unpack("<4I", g_av[0][1]) == (0x486, 0x474, 0x477, 0x47A) and struct.unpack("<4I", g_av[1][1]) == (1, 3840, 2160, 23)

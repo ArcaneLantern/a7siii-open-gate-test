@@ -24,7 +24,7 @@ for L in 16 17; do
   "${CC[@]}" -DLEVEL=$L '-DWORDS_H="expected_words_lcdratio32_s3_v1.h"' readcheck.c "$SEN" -o "$H/libJit_s3_S$L.so"
 done
 for L in 19 20; do
-  "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_lcdcycle_s3_v2.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_s3_C$L.so"
+  "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_lcdcycle_s3_v3.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_s3_C$L.so"
 done
 cd "$H"
 for L in 5 6 16 17 19 20; do echo "$(sha256sum libJit_s3_L$L.so | cut -d' ' -f1) $(stat -c %s libJit_s3_L$L.so) level $L"; done

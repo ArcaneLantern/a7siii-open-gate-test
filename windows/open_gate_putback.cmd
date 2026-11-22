@@ -1,6 +1,6 @@
 @echo off
-rem A7S III (firmware 5.01): put the open-gate state back to stock.
-rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock.
+rem A7S III (firmware 5.01): put all five steps back to stock (press C3 until the screen is at 3:2 first).
+rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock; on the tester's camera the power switch did too.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
   echo Python environment missing: run setup.cmd first.

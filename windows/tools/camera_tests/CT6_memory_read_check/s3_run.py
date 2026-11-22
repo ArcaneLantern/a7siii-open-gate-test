@@ -51,8 +51,8 @@ WRITE_STEPS = {
     # level 19/20 code with the C3 routine for appFw.so. The digits are the level the library reports in its result's first line.
     "S16": ("libJit_s3_S16.so", "ffd20cf41d5bf2bc2376ef97f1d78dd1c9e4e307c4f1f4949d8af60e2de46333", "apply the screen words lcdratio32_s3_v1 (3:2 picture on the rear screen and viewfinder, and the focus-frame rectangles: 14 words)"),
     "S17": ("libJit_s3_S17.so", "1f3afee9fd04b0fa90a6455a8b8c65f108c348c6c4336339da9409a586d317fc", "put back the screen words lcdratio32_s3_v1"),
-    "C19": ("libJit_s3_C19.so", "52fcf5f911dc544f452482e54b8ebf846a6d62c02a7f868e63e669cdff69e7df", "apply the C3 preview routine lcdcycle_s3_v2 (code in appFw.so: the routine, then one branch to it)"),
-    "C20": ("libJit_s3_C20.so", "ee2d1327aff804ac6930e914d9041500b29d5dcaa61bc9c1a2f0be9a8f10f1c5", "put back the C3 preview routine lcdcycle_s3_v2"),
+    "C19": ("libJit_s3_C19.so", "3a90cc6e280826c7f3aa70eb4aedef40aca63eb7c5b59957d9b6a6cfd88bde0f", "apply the C3 preview routine lcdcycle_s3_v3 (3:2, 2:1, 2.25:1, 2.4:1; code in appFw.so: the routine, then one branch to it)"),
+    "C20": ("libJit_s3_C20.so", "9de9a4924d4bfc8a2c253168e13c121732dc9868f9a2f350c9eb97b4816ae069", "put back the C3 preview routine lcdcycle_s3_v3"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
 LEVELS.update({k: {"L": 200, "S": 300, "C": 400}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
