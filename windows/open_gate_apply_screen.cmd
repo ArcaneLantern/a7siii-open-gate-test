@@ -1,5 +1,5 @@
 @echo off
-rem A7S III (firmware 5.01): open gate plus the rear screen at 3:2 and the C3 preview cycle. THE TWO SCREEN STEPS HAVE NEVER RUN ON AN A7S III.
+rem A7S III (firmware 5.01): open gate plus the screen at 3:2 and the C3 preview cycle. THE TWO SCREEN STEPS IN THIS KIT HAVE NOT RUN ON A CAMERA YET.
 rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (

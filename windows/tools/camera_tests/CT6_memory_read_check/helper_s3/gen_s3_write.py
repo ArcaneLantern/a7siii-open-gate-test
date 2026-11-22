@@ -8,8 +8,9 @@ only their tables differ. This writes, into helper/, in the formats helper/gen_e
   expected_words_outsz2560_s3_v1.h        levels 16 and 17: the output-size word and its two guards
   expected_mp_ogfile2560_hs_s_s3_v1.h     levels 19 and 20 (and 18): the encoder-side sites and guards
 and for the rear screen (modding/A7S3_PORT.md section 26), built as separate libraries:
-  expected_words_lcdfill_s3_v1.h          levels 16 and 17: the fit word and the three frame-table entries, with their guards
-  expected_mp_lcdcycle_s3_v1.h            levels 19 and 20: the C3 routine and its hook in appFw.so (code, written in order)
+  expected_words_lcdratio32_s3_v1.h       levels 16 and 17: the 3:2 picture-ratio constants and six frame-table entries, with their guards
+  expected_mp_lcdcycle_s3_v2.h            levels 19 and 20: the C3 routine and its hook in appFw.so (code, written in order)
+(lcdfill_s3_v1 and lcdcycle_s3_v1, the first screen designs, ran on a camera on 2026-11-22 and are replaced: section 27.)
 Every stock byte is compared with the 5.01 files here. gen_expected.py is not used: its checks name A7 IV
 addresses. The same kinds of check are made below with this build's.
 """
@@ -65,7 +66,11 @@ def sites_header(name="ogsq_s3_v5"):
 # Where a words design may have a site, and where a guard (the site regions plus these). The rear-screen design: the VDF fit-mode tables
 # after the fit function (a guard may cover the function too) and the three frame-table rows (build/build_lcd_s3.py).
 WORD_REGIONS = {"outsz2560_s3_v1": ((SIZE_TABLE,), ()),
-                "lcdfill_s3_v1": (((0x1E4C78, 0x1E4CBC), (0xD4D744, 0xD4D7BC), (0xD4D7BC, 0xD4D834), (0xD4D834, 0xD4D8AC)), ((0x1E4C28, 0x1E4CBC),))}
+                "lcdfill_s3_v1": (((0x1E4C78, 0x1E4CBC), (0xD4D744, 0xD4D7BC), (0xD4D7BC, 0xD4D834), (0xD4D834, 0xD4D8AC)), ((0x1E4C28, 0x1E4CBC),)),
+                # the two constant words of the picture-ratio function's 16:9 case, and the same three tables; a guard may lie anywhere in
+                # that function or in the fit-mode function and its tables
+                "lcdratio32_s3_v1": (((0x1E4F98, 0x1E4FA0), (0xD4D744, 0xD4D7BC), (0xD4D7BC, 0xD4D834), (0xD4D834, 0xD4D8AC)),
+                                     ((0x1E4C28, 0x1E4CBC), (0x1E4F64, 0x1E5066)))}
 
 
 def words_header(name="outsz2560_s3_v1"):
@@ -150,14 +155,14 @@ def mp_header(name="ogfile2560_hs_s_s3_v1"):
     return {b: (sum(1 for e in t if e[1] == 1), sum(1 for e in t if e[1] == 0)) for b, t in tabs.items()}, hex(first), hex(span)
 
 
-def mp_appfw_header(name="lcdcycle_s3_v1"):
-    """An appFw.so design (build/build_lcdcycle_s3.py): code sites, written in the design's order (the cave before the branch into it), put
+def mp_appfw_header(name="lcdcycle_s3_v2"):
+    """An appFw.so design (build/build_lcdcycle_s3.py or its _v2): code sites, written in the design's order (the cave before the branch into it), put
     back in reverse (MP_LM_ORDERED). The format is that of helper/gen_expected.py --mp for the A7 IV's lcdcycle designs. The av-cam.bin
     table holds only the two standard guards, so nothing is written there. Guards in appFw.so: the file's first 16 bytes, the 16 file
     bytes just before the cave, 16 bytes on each side of the hooked instruction, and the first 16 bytes of each function the routine calls."""
     d = json.loads((DES / f"{name}.json").read_text(encoding="utf8"))
     av, lib = (EX / "nflasha3/av-cam.bin").read_bytes(), (EX / "nflasha15/lib/appFw.so").read_bytes()
-    assert d["generated_by"] == "build/build_lcdcycle_s3.py" and d["library"] == "appFw.so" and all(p["binary"] == "appFw.so" and p["code"] for p in d["patches"])
+    assert d["generated_by"] in ("build/build_lcdcycle_s3.py", "build/build_lcdcycle_s3_v2.py") and d["library"] == "appFw.so" and all(p["binary"] == "appFw.so" and p["code"] for p in d["patches"])
     assert d["artifact_sha256"] == {"appFw.so": hashlib.sha256(lib).hexdigest()}, "the design was made from another appFw.so"
     g_av = [(UNIT + 0x20, av[UNIT + 0x20:UNIT + 0x30]), (CLIP + 0x50, av[CLIP + 0x50:CLIP + 0x60])]
     assert struct.unpack("<4I", g_av[0][1]) == (0x486, 0x474, 0x477, 0x47A) and struct.unpack("<4I", g_av[1][1]) == (1, 3840, 2160, 23)
@@ -209,5 +214,5 @@ if __name__ == "__main__":
     print("sites header:", sites_header())
     print("words header:", words_header())
     print("mp header:", mp_header())
-    print("words header, rear screen:", words_header("lcdfill_s3_v1"))
+    print("words header, rear screen:", words_header("lcdratio32_s3_v1"))
     print("mp header, C3 routine:", mp_appfw_header())

@@ -1,30 +1,29 @@
-/* lcdcycle_s3_v1: the step routine that the C3 hook in the A7S III 5.01 appFw.so calls (build/build_lcdcycle_s3.py). It is the A7 IV's
- * lcdcycle_v6 routine (build/lcdcycle_v6/step.c, works on that camera: F858, F969) with this camera's addresses. Freestanding, position
- * independent: every call is a PC-relative `bl` to an appFw address given to the linker, or through a pointer that dlsym returned.
+/* lcdcycle_s3_v2: the step routine that the C3 hook in the A7S III 5.01 appFw.so calls (build/build_lcdcycle_s3_v2.py).
+ * Freestanding, position independent: every call is a PC-relative `bl` to an appFw address given to the linker, or through a pointer
+ * that dlsym returned.
  *
- * In movie mode, one C3 press steps the rear-screen preview 3:2 -> 2:1 -> 2.4:1 -> 3:2:
- *   - the picture: the VDF fit word and the letterbox constants of the picture-ratio function (9/16, 1/2, 5/12);
- *   - the rectangle the coprocessor's frame widgets expect for a 16:9 picture on the rear panel, in their three tables
- *     ({x, y, w, h} as u16 in a 640x480 grid). The widgets draw no frame unless the live-view rectangle is within 5 units of that entry.
- * Then it asks VDF for a fresh layout (appFw's vdf_set_yuv_layout wrapper, automatic case-0 request).
+ * v1 ran on an A7S III on 2026-11-22: the hook, the routine, its transfers and the layout request all work there (C3 stepped the
+ * rear-screen preview). Its 3:2 state was wrong for this camera: it relied on the fit word of a 3:2 panel, and this camera's rear
+ * panel is a 4:3 one, where a 16:9 picture is always letterboxed and only the picture-ratio constants decide its height.
  *
- * Differences from the A7 IV routine, all forced by where things lie in this image (pool.h, generated from the 5.01 file):
- *   - the constants are `moveq.w lr, #n` and `it eq; moveq r0, #d` (the A7S III function has a second, 100/235 case in front of them);
- *   - the middle table's entry lies across two 64-byte lines, so it is two lines of one word each;
- *   - a guard that would fall outside its line is left out;
- *   - the De-Squeeze model variable is not written (on the A7 IV it was kept for reference only).
+ * So in v2 the three states are three pairs of constants, and the fit word is not touched. In movie mode, one C3 press steps
+ *   3:2 (height = width x 2/3) -> 2:1 (x 1/2, 1.33x anamorphic) -> 2.4:1 (x 5/12, 1.6x anamorphic) -> 3:2
+ * and from the stock constants (9/16: the screen step lcdratio32_s3_v1 not applied) a press goes to 3:2. With them it writes the
+ * rectangle the coprocessor's frame widgets expect for a 16:9 picture on a 4:3 panel ({x, y, w, h} u16 in a 640x480 grid), in the
+ * rows of the rear panel and of the viewfinder of their three tables. Then it asks VDF for a fresh layout (appFw's
+ * vdf_set_yuv_layout wrapper, automatic case-0 request). The viewfinder is a 4:3 panel too and takes the same constants.
  *
- * The state is read from the coprocessor (the letterbox constants) on every press, so any start state works. Every line is read,
- * checked against the bytes it must hold, changed, written back and read again. The picture comes first: the layout is requested when
- * the two picture lines were written and read back, whatever happened to the frame tables (a table that is not as expected is left
- * alone, and the frames then stay hidden in that mode).
+ * The state is read from the coprocessor (the constants) on every press. Every line is read, checked against the bytes it must
+ * hold, changed, written back and read again. The picture comes first: the layout is requested when the constants were written and
+ * read back, whatever happened to the frame tables (a table that is not as expected is left alone, and the frames may then be
+ * hidden in that mode).
  *
  * Returns 1 when the press was taken (movie mode): the hook then turns the key event into the ignored one; 0 otherwise. */
 typedef unsigned long u64;
 typedef unsigned int u32;
 
 extern void *appfw_dlsym(void *handle, const char *name);       /* appFw .plt stub of dlsym */
-extern u32 *appfw_system_mode(void);                            /* the model's system mode, 3 = movie */
+extern u32 *appfw_system_mode(void);                            /* the model's system mode, 3 = movie (seen to hold on this camera with v1) */
 extern void appfw_vdf_layout(void *in, void *out);              /* lock, vdf_set_yuv_layout, unlock */
 
 typedef u64 (*alloc_t)(u32 size, u32 *handle);
@@ -33,6 +32,7 @@ typedef u32 (*xfer_t)(u32 dir, u64 src, u64 dst, u32 size);
 
 #define NONE 9u                /* no state / failed */
 #define ANY 8u                 /* any listed candidate may be there */
+#define STATES 3u              /* candidates 0..2 are the cycle; candidate 3 is the stock value, a start state only */
 
 /* system calls with only the registers each one needs */
 static inline long sc1(long n, long a)
@@ -61,9 +61,9 @@ static inline long sc6(long n, long a, long b, long c, long d, long e, long f)
     return x0;
 }
 
-/* The coprocessor lines, as data (no pointers: the routine must have no relocations). POOL holds, for each kind of line, its guards as
- * {word index from the first site word, value} pairs, then its candidates (nw words each). pool.h defines POOL, DESC, D_A, D_B, D_T0,
- * D_SPLIT and D_TLAST from the 5.01 image. */
+/* The coprocessor lines, as data (no pointers: the routine must have no relocations). POOL holds, for each line, its guards as
+ * {word index from the first site word, value} pairs, then its candidates (nw words each). pool.h defines POOL, DESC, D_B (the
+ * constants), D_T0 and D_TLAST (the table lines) from the 5.01 image. */
 struct desc { u32 line; unsigned char base, ng, ncand, nw, g, c; };
 #include "pool.h"
 struct ctx { xfer_t xfer; u64 phys; volatile u32 *buf; };
@@ -123,18 +123,14 @@ int lcd_step(void)
             long m = sc6(222, 0, (long)maplen, 3, 1, fd, (long)(phys - lead));    /* mmap(0, len, READ|WRITE, SHARED, fd, page) */
             if ((m & 0xfff) == 0 && (unsigned long)m < 0xfffffffffffff000UL) {
                 c.buf = (volatile u32 *)(m + (long)lead);
-                /* the state now, from the coprocessor itself: line B's constants */
+                /* the state now, from the coprocessor itself: the constants (a cycle state, or the stock pair) */
                 u32 now = upd(&c, D_B, ANY, NONE);
-                if (now < 3) {
-                    u32 next = now == 2 ? 0 : now + 1;
-                    /* line A's fit word must agree with that state (3:2 needs the fill word 0); then line B */
-                    if (upd(&c, D_A, now, next) != NONE && upd(&c, D_B, now, next) != NONE) {
+                if (now <= STATES) {
+                    u32 next = now + 1 >= STATES ? 0 : now + 1;           /* 0 -> 1 -> 2 -> 0; stock (3) -> 0 */
+                    if (upd(&c, D_B, now, next) != NONE) {
                         ok = 1;
-                        for (u32 t = D_T0; t <= D_TLAST; t++) {           /* the frame tables: best effort, the picture is already changed */
-                            /* the entry that lies across two lines (D_SPLIT and the line after it): both halves or neither */
-                            if (t == D_SPLIT && upd(&c, t + 1, ANY, NONE) == NONE) { t++; continue; }
-                            if (upd(&c, t, ANY, next) == NONE && t == D_SPLIT) t++;
-                        }
+                        for (u32 t = D_T0; t <= D_TLAST; t++)             /* the frame tables: best effort, the picture is already changed */
+                            upd(&c, t, ANY, next);
                     }
                 }
                 sc2(215, m, (long)maplen);                                /* munmap */

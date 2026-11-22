@@ -260,7 +260,7 @@ static const unsigned char B254[] = {112,8};
 static const unsigned char B255[] = {0,10};
 static const unsigned char B256[] = {112,8,0,0};
 static const unsigned char B257[] = {0,10,0,0};
-#define S3_LABEL "s3read_v7"
+#define S3_LABEL "s3read_v8"
 #define CP_LO 0xc0000U
 #define CP_HI 0x2100000U
 #define AVCAM_PHYS 0x401000000UL
@@ -437,5 +437,8 @@ static const struct dump_range dump_ranges[] = {
     {"resizework", 0x11b5000, 1},
     {"resizestate", 0x13ff000, 4},
     {"wbuf", 0x119a000, 2},
+    {"display", 0x1e4000, 1},
+    {"frametab", 0xd4d000, 1},
+    {"paneltype", 0x14b9000, 1},
 };
 #endif

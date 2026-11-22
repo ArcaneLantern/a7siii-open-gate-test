@@ -7,9 +7,22 @@ The A7S III image holds the same code and tables at other addresses (modding/A7S
 So the seven words of lcdfill_v2 move with them, and every guard of lcdfill_v2 moves with its site. This builder checks each site and
 guard against BOTH images: the A7S III bytes must equal the A7 IV bytes at the corresponding A7 IV address.
 
-  C:\\Python313\\python.exe -I -B build/build_lcd_s3.py     writes modding/designs/lcdfill_s3_v1.json
+  C:\\Python313\\python.exe -I -B build/build_lcd_s3.py     writes modding/designs/lcdfill_s3_v1.json and lcdratio32_s3_v1.json
 
-Read-only apart from that file. Nothing here talks to a camera.
+lcdfill_s3_v1 RAN ON AN A7S III (2026-11-22) AND DOES NOT GIVE A 3:2 SCREEN THERE: the rear panel of this camera is not a 3:2 panel, so
+the fit word it changes (16:9 picture on a 3:2 panel) is never read (modding/A7S3_PORT.md section 27). It is kept here as built.
+
+Design lcdratio32_s3_v1 replaces it. The panel's aspect code comes from a panel-type byte (0x1e58b8: 0x5f4e04 reads RAM 0x14b9600 for
+the rear panel, 0x5f4e16 reads 0x14b9730 for the viewfinder; type 2 = 4:3, type 3 = 3:2, type 1 = 16:9). On a 4:3 panel a 16:9 picture
+is letterboxed (fit word 3 at 0x1e4c78, left alone) at the height the picture-ratio function 0x1e4f64 gives: width x 9/16. The live
+view of the open-gate state is a 16:9 frame holding the whole 3:2 sensor area, so the right height is width x 2/3:
+  0x1e4f98  moveq.w lr, #9  -> #2          0x1e4f9c  it eq; moveq r0, #16 -> #3
+(the function's own 3:2 case uses 2 and 3, and adds 3 to the width first: 640 -> 428, as in the camera's tables). The frame widgets
+compare the live-view rectangle with a table entry (0x128438: row 0 for a rear panel of type 0, row 2 for the viewfinder, row 1 for
+the A7 IV's kind of panel); the 16:9 entries of rows 0 and 2 go from (0, 60, 640, 360) to (0, 26, 640, 428) in all three tables.
+The viewfinder is a 4:3 panel too and takes the same constants, so it shows the same picture.
+
+Read-only apart from those files. Nothing here talks to a camera.
 """
 import hashlib
 import json
@@ -83,8 +96,66 @@ def design():
             "sites": sites, "guards": guards}
 
 
+RATIO_FN, RATIO_END = 0x1E4F64, 0x1E5066                         # the picture-ratio function (A7 IV 0x1e4da0, not identical)
+CONST = (0x1E4F98, 0x1E4F9C)                                      # moveq.w lr, #n ; it eq + moveq r0, #d  (a 16:9 picture: 9/16)
+ROWS = ((0, "a rear panel of type 0 (4:3, this camera's)"), (2, "the viewfinder (4:3)"))
+RECT_169, RECT_32 = (0, 60, 640, 360), (0, 26, 640, 428)          # on a 4:3 panel's 640x480 grid: 16:9 and 3:2, centred
+
+
+def ratio_words(n, d):
+    """The two instruction words that give a 16:9 picture the height width x n/d."""
+    assert 0 < n < 256 and 0 < d < 256
+    return bytes([0x4F, 0xF0, n, 0x0E]), bytes([0x08, 0xBF, d, 0x20])
+
+
+def design_ratio32():
+    assert (s3(CONST[0], 4), s3(CONST[1], 4)) == ratio_words(9, 16), "the 16:9 constants are not where they were read"
+    assert s3(FIT_S3 + 0x50, 4) == bytes.fromhex("03000000"), "a 16:9 picture on a 4:3 panel is not letterboxed in the stock table"
+    assert s3(0x1E4F80, 6) == bytes.fromhex("4ff0020e0320"), "the function's own 3:2 case is not lr 2, r0 3"
+    new = ratio_words(2, 3)
+    sites = [{"ram_address": hex(CONST[0]), "old": s3(CONST[0], 4).hex(), "new": new[0].hex(),
+              "note": "picture-ratio function, 16:9 picture: `moveq.w lr, #9` to `#2` (the numerator of height = width x n / d)"},
+             {"ram_address": hex(CONST[1]), "old": s3(CONST[1], 4).hex(), "new": new[1].hex(),
+              "note": "picture-ratio function, 16:9 picture: `it eq; moveq r0, #16` to `#3` (the denominator). With 2 and 3 the function adds 3 to the "
+                      "width first, as for its own 3:2 pictures: 640 wide gives 428 high"}]
+    guards = [{"ram_address": hex(RATIO_FN), "bytes": s3(RATIO_FN, 16).hex(), "note": "first 16 bytes of the picture-ratio function, as in the file"},
+              {"ram_address": hex(0x1E4F88), "bytes": s3(0x1E4F88, 16).hex(), "note": "the 16 bytes before the constants: the flag test and the 100/235 case, as in the file"},
+              {"ram_address": hex(0x1E4FA0), "bytes": s3(0x1E4FA0, 16).hex(), "note": "the 16 bytes after the constants, as in the file"},
+              {"ram_address": hex(FIT_S3), "bytes": s3(FIT_S3, 16).hex(), "note": "first 16 bytes of the fit-mode function, as in the file"},
+              {"ram_address": hex(FIT_S3 + 0x50), "bytes": s3(FIT_S3 + 0x50, 4).hex(), "note": "fit mode for a 16:9 picture on a 4:3 panel: 3 letterbox (what makes the constants count)"}]
+    for what, _, t3 in TABLES:
+        for row, panel in ROWS:
+            e = t3 + 8 * (5 * row + 3)                              # column 3 = a 16:9 picture
+            assert s3(e, 8) == rect(RECT_169), "%#x is not the 16:9 entry (0, 60, 640, 360)" % e
+            for off, part in ((0, "x, y"), (4, "w, h")):
+                sites.append({"ram_address": hex(e + off), "old": rect(RECT_169)[off:off + 4].hex(), "new": rect(RECT_32)[off:off + 4].hex(),
+                              "note": "%s, %s: expected live-view rectangle for a 16:9 picture, %s: %s to %s" % (what, panel, part, RECT_169, RECT_32)})
+            guards += [{"ram_address": hex(e - 8), "bytes": s3(e - 8, 8).hex(), "note": "the entry before (1:1 picture), as in the file"},
+                       {"ram_address": hex(e + 8), "bytes": s3(e + 8, 8).hex(), "note": "the entry after (17:9 picture: 0, 71, 640, 338), as in the file"}]
+    assert all(int(x["ram_address"], 16) % 4 == 0 and s3(int(x["ram_address"], 16), 4) == bytes.fromhex(x["old"]) and x["old"] != x["new"] for x in sites)
+    # the letterbox the function gives for these constants on an 800x600 panel, in the widgets' 640x480 grid: within their tolerance of 5
+    h = ((((800 + 3) << 8) // 3) * 2 >> 8) & 0xFFFE
+    got = (0, (600 - h) // 2 * 640 / 800, 640, h * 640 / 800)
+    assert all(abs(a - b) <= 2 for a, b in zip(got, RECT_32)), got
+    return {"design": "lcdratio32_s3_v1",
+            "title": "A7S III 5.01: rear screen and viewfinder show the open-gate live view at 3:2: the letterbox of a 16:9 picture is given the height "
+                     "width x 2/3, and the frame widgets expect the live view there",
+            "kind": "ram_words", "artifact": "cpapp-b.bin 5.01 (ILCE-7SM3), its loaded image in coprocessor RAM: the words are in the file, the change is made in RAM only",
+            "artifact_sha256": hashlib.sha256(S3).hexdigest(), "generated_by": "build/build_lcd_s3.py",
+            "replaces": "lcdfill_s3_v1, which changes a word this camera does not read (camera test 2026-11-22: the screen stayed at 16:9)",
+            "summary": {"sites": len(sites), "bytes": 4 * len(sites), "panel": "rear LCD and viewfinder, both 4:3 panels (panel code 0); inferred from the camera test and the firmware",
+                        "picture": "16:9 live view (picture code 2), which in the open-gate state holds the whole 3:2 sensor area squeezed",
+                        "ratio_stock": "9/16", "ratio_new": "2/3", "frame_rectangle_stock": list(RECT_169), "frame_rectangle_new": list(RECT_32),
+                        "goes_with": ["the A7S III open-gate state (ogsq_s3_v5, outsz2560_s3_v1, ogfile2560_hs_s_s3_v1)", "lcdcycle_s3_v2"]},
+            "while_applied": "every 16:9 picture on the rear screen and in the viewfinder is shown at 3:2 (other movie formats look squeezed there); HDMI is unchanged",
+            "checked_against": ["cpapp-b.bin 5.01: every site and guard byte", "the function's own 3:2 case (lr 2, r0 3) and the tables' 3:2 height 428"],
+            "not_checked": ["on a camera: this design has not run", "the panel-type bytes 0x14b9600 and 0x14b9730 (not read yet; the dump of helper s3read_v8 reads them)",
+                            "which table row the rear panel's widgets use (rows 0 and 2 are both set)"],
+            "sites": sites, "guards": guards}
+
+
 if __name__ == "__main__":
-    d = design()
-    out = ROOT / "modding/designs/lcdfill_s3_v1.json"
-    out.write_text(json.dumps(d, indent=1) + "\n", encoding="utf8", newline="\n")
-    print("%s: %d sites %s; %d guards" % (out.name, len(d["sites"]), ", ".join(s["ram_address"] for s in d["sites"]), len(d["guards"])))
+    for d in (design(), design_ratio32()):
+        out = ROOT / ("modding/designs/%s.json" % d["design"])
+        out.write_text(json.dumps(d, indent=1) + "\n", encoding="utf8", newline="\n")
+        print("%s: %d sites %s; %d guards" % (out.name, len(d["sites"]), ", ".join(s["ram_address"] for s in d["sites"]), len(d["guards"])))

@@ -3,27 +3,35 @@
   python s3_apply.py apply    [--screen] [--dry-run]
   python s3_apply.py putback  [--screen] [--dry-run]
   python s3_apply.py screen | screen-putback  [--dry-run]
+  (apply and screen take --no-movie-session to leave out the closing read-only session)
 
 The three open-gate steps worked on one tester's A7S III on 2026-11-22 (a true 3840x2560 file of the whole sensor area).
-THE TWO SCREEN STEPS HAVE NEVER RUN ON AN A7S III (2026-11-22); they are the A7 IV's working screen steps at this
-camera's addresses.
+The first screen steps ran on that camera the same day: C3 stepped the preview, but the 3:2 state showed 16:9 (this
+camera's rear screen is a 4:3 panel, not the A7 IV's 3:2 one). THE CORRECTED SCREEN STEPS IN THIS KIT HAVE NOT RUN YET.
 
   apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
            L19 encoder side (ogfile2560_hs_s_s3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
-           With --screen two more: S16 rear screen at 3:2 with the focus frames (lcdfill_s3_v1), C19 the C3 key steps the
-           rear-screen preview 3:2 -> 2:1 -> 2.4:1 in movie mode (lcdcycle_s3_v1). A step that finds its bytes already
+           With --screen two more: S16 rear screen and viewfinder at 3:2 with the focus frames (lcdratio32_s3_v1), C19 the C3
+           key steps the preview 3:2 -> 2:1 -> 2.4:1 in movie mode (lcdcycle_s3_v2). A step that finds its bytes already
            applied says NOTHING TO DO and counts as passed, so this also adds the screen steps to an applied open gate.
   putback  the reverse, L20, L17, L6 (with --screen: C20, S17 first). A cold boot (battery out for 10 seconds) also
            undoes everything.
   screen / screen-putback   only the two screen steps (S16, C19) or their put back (C20, S17). Put back needs the
            preview at 3:2: press C3 until it is. The words C3 wrote stay as they are until a cold boot otherwise.
 
+The closing session (apply and screen). The first time movie mode is entered after the steps, the live view is glitchy; a
+read-only dump session taken with the dial on movie, or the start of a recording, corrected it in every test, and after that it
+stays right across switches to stills and back (the tester, 2026-11-22). So the script ends by asking for the dial on MOVIE and
+an unplug and replug, and runs the read-only dump itself. Nothing is written in that session.
+
 Rules it keeps:
 - It starts only if the newest saved read-only check of this kit says VERDICT READY.
 - It stops at the first step that does not end in DONE or NOTHING TO DO, and says what state that leaves.
 - Each step is one pinned library; the runner (s3_run.py) refuses any other bytes.
 Nothing is written to a firmware file or to the camera's settings. What is written lives in the running camera's
-memory until a cold boot; switching the camera off and on does not clear it.
+memory. A cold boot (battery out for 10 seconds) removes it. On the tester's A7S III switching the camera off and on with
+the power switch removed it as well (reported 2026-11-22; on the A7 IV it does not), so the camera must stay on from the
+first step to the last.
 """
 import argparse
 import json
@@ -69,7 +77,7 @@ def last_check():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 ", "s3read_v5 ", "s3read_v6 ", "s3read_v7 "))
+            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 ", "s3read_v5 ", "s3read_v6 ", "s3read_v7 ", "s3read_v8 "))
             return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
     return None
 
@@ -111,6 +119,53 @@ def wait_for_drive(first, timeout=600):
     return True
 
 
+def wait_for_replug(timeout=900):
+    """Wait until the camera has been unplugged and shows up as a USB drive again. False on timeout."""
+    end = time.time() + timeout
+    while usb_state() != "other":                    # still plugged in, as a drive or in service mode
+        if time.time() > end:
+            return False
+        time.sleep(1)
+    while usb_state() != "drive":
+        if time.time() > end:
+            return False
+        time.sleep(2)
+    return True
+
+
+def movie_session():
+    """The closing read-only session, taken with the dial on movie: the camera starts its picture in movie mode when it ends."""
+    say()
+    say("=" * 78)
+    say("One more session, and it only READS. It is what corrected the glitchy first live view in every test so far.")
+    say(">>> 1. Turn the mode dial to MOVIE (File Format XAVC HS 4K or XAVC S 4K, 24p).")
+    say(">>> 2. Unplug the USB cable. Look at the rear screen for five seconds and remember it: right, or glitchy?")
+    say(">>> 3. Plug the USB cable in again.")
+    say(">>> Do NOT switch the camera off: on this camera the power switch removes the patch.")
+    say("Waiting for the unplug and the replug (Ctrl+C to stop; the patch stays applied either way) ...")
+    if not wait_for_replug():
+        say("The camera did not come back as a USB drive. The steps are applied all the same.")
+        say("If the live view is glitchy: start and stop a short recording, or run dump_info with the dial on movie.")
+        return
+    cmd = [sys.executable, "-I", "-B", str(RUNNER), "dump", "--go", "--firmware-shown", FIRMWARE]
+    clear = last_result_sha()
+    if clear:
+        cmd += ["--clear-result", clear]
+    rc = subprocess.run(cmd).returncode
+    which, f = step_outcome()
+    say()
+    if rc or which != "dump" or not f:
+        say("The read-only session did not finish. The steps are applied all the same.")
+        say("If the live view is glitchy: start and stop a short recording, or run dump_info with the dial on movie.")
+        return
+    column = ((f.get("decoded") or {}).get("sensor_registers") or {}).get("closest_column")
+    if column != 1:                                  # the open-gate 4K 24p mode runs sensor register column 1
+        say("NOTE: before this session the sensor was not in the open-gate 4K 24p mode (register column %s, not 1)." % column)
+        say("      Was the dial on movie, at 4K 24p? If not: set it, replug, and run dump_info once more.")
+    say(">>> Unplug USB now. The live view should be right, and it should stay right when you go to stills and back.")
+    say("    If it is glitchy all the same: start and stop a short recording. Please tell us which it was, and what you saw in step 2.")
+
+
 def step_outcome():
     for _, man in sessions():
         f = man.get("results", {}).get("ct6", {}).get("result", {}).get("s3")
@@ -123,6 +178,7 @@ def main():
     ap.add_argument("what", choices=sorted(STEPS))
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
     ap.add_argument("--screen", action="store_true", help="with apply or putback: the two rear-screen steps as well (3:2 screen, C3 preview cycle)")
+    ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session with the dial on movie")
     a = ap.parse_args()
     steps = STEPS[a.what]
     if a.screen:
@@ -139,6 +195,8 @@ def main():
     say("A7S III 5.01, %s: %d steps" % (a.what, len(steps)))
     for n, k in enumerate(steps, 1):
         say("  %d. %s  %s  (library %s...)" % (n, k, s3_run.WRITE_STEPS[k][2], s3_run.WRITE_STEPS[k][1][:16]))
+    if applying and not a.no_movie_session:
+        say("  then one read-only session (dump) with the dial on movie: it corrects the glitchy first live view. Nothing is written in it.")
     if a.dry_run:
         for k in steps:
             say()
@@ -157,10 +215,12 @@ def main():
     if applying:
         say("The three open-gate steps have worked on one A7S III (2026-11-22)." if a.what == "apply" else "This adds the two screen steps to an applied open-gate state.")
         if with_screen:
-            say("THE TWO SCREEN STEPS HAVE NEVER RUN ON AN A7S III. They are the A7 IV's working screen steps at this camera's addresses.")
+            say("THE TWO SCREEN STEPS IN THIS KIT HAVE NOT RUN ON A CAMERA YET. They are the corrected ones for this camera's 4:3 rear screen.")
+            say("If the first screen steps (the kit of 2026-11-22 morning) are still in the camera's memory: pull the battery for 10 seconds first.")
     else:
         say("It has to follow an apply of this kit.")
-    say("A cold boot (battery out for 10 seconds) returns the camera to stock.")
+    say("A cold boot (battery out for 10 seconds) returns the camera to stock. On the tester's camera the power switch did too:")
+    say("so KEEP THE CAMERA SWITCHED ON from now until the script says it is finished.")
     if a.what == "apply":
         say("Before you go on: dial on stills, a charged battery, and a camera that was cold booted and has not been in movie mode since.")
         say("(If the open-gate state is already applied in this power-on, its three steps will say NOTHING TO DO: that is fine.)")
@@ -191,18 +251,22 @@ def main():
     say()
     say("All %d steps passed (%s)." % (len(steps), a.what))
     if with_screen and applying:
-        say("The screen steps: in movie mode the rear screen should now show the whole 3:2 picture, filling the screen.")
+        say("The screen steps: in movie mode the rear screen and the viewfinder should now show the whole picture at 3:2,")
+        say("  with thin black bars above and below (the screen is 4:3). A circle should look round.")
         say("  C3 in movie mode steps the preview: 3:2 -> 2:1 (1.33x anamorphic) -> 2.4:1 (1.6x anamorphic) -> 3:2. The file does not change.")
-        say("  While they are applied C3 does nothing else in movie mode, and every 16:9 picture fills the rear screen (other movie formats look stretched).")
-        say("  Please report: the screen in each of the three modes, the focus frames in each, and anything C3 does that is not this.")
-    if a.what == "apply":
-        say(">>> BEFORE you unplug: turn the mode dial to MOVIE. Then unplug USB.")
-        say("    (The camera then starts its picture directly in movie mode. A switch from stills to movie with the patch applied")
-        say("     gave a wrong live view in the last test, until the camera's next start of the picture.)")
-        say("Then: File Format XAVC HS 4K or XAVC S 4K at 24p (23.98p). Watch the picture for 30 seconds, then follow the README (dump, record, dump).")
-        say("If the live view is wrong all the same: leave the dial on movie, replug USB, run dump_info, unplug. That corrected it in the last test.")
+        say("  While they are applied C3 does nothing else in movie mode, and every 16:9 picture is shown at the chosen shape (other movie formats look squeezed).")
+        say("  Please report: the screen in each of the three modes, the focus frames in each, the viewfinder, and anything C3 does that is not this.")
+        say("  The closing session below saves a dump that reads the display tables: leave the preview at 3:2 for it.")
+    if applying:
+        if a.no_movie_session:
+            say(">>> BEFORE you unplug: turn the mode dial to MOVIE. Then unplug USB.")
+            say("    If the live view is glitchy: start and stop a short recording, or run dump_info with the dial on movie.")
+        else:
+            movie_session()
+        say()
+        say("Use only XAVC HS 4K or XAVC S 4K at 24p (23.98p) while it is applied: 60p distorted the picture and crashed the tester's camera.")
         say("If the camera stops or restarts: do NOT pull the battery yet. Dial to stills, replug USB and run dump_info, then send camera_private.")
-        say("To return to stock: battery out for 10 seconds.")
+        say("To return to stock: battery out for 10 seconds. (Switching off and on did it too on the tester's camera.)")
 
 
 if __name__ == "__main__":

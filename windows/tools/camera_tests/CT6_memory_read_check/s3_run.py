@@ -34,8 +34,8 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "f2f6a3f2b99038591243e05609f908166a5eee64af3816cbbc73611d0c69d17d"),
-        "dump": ("libJit_s3_dump.so", "fbd138900e0c20c506b5b28c3ea74a927ba80d9d03d199c8160253a6a7081459")}
+PINS = {"check": ("libJit_s3_check.so", "e8adeae97caab3b26958068de0dcf1dacd76ad8483333b5cf23f91743d6a91dc"),
+        "dump": ("libJit_s3_dump.so", "ad416c29151f435f45aa71c6bb8f4bb9cf24c85bf098945642e92bf76f37f91c")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
@@ -49,10 +49,10 @@ WRITE_STEPS = {
     "L20": ("libJit_s3_L20.so", "3683c64f54784cfb7fde5af0c4b4096cb6cd3d58cc9c3d988c92abd1c9358f86", "put back the encoder-side design ogfile2560_hs_s_s3_v1"),
     # The rear-screen steps (optional, on top of the open-gate state). S = the same level 16/17 code with the screen words; C = the same
     # level 19/20 code with the C3 routine for appFw.so. The digits are the level the library reports in its result's first line.
-    "S16": ("libJit_s3_S16.so", "67de1f4042f9f6340ebb0886e7243d20532678960a147cd22f030f72e7821476", "apply the rear-screen words lcdfill_s3_v1 (3:2 fill and the focus-frame rectangles, 7 words)"),
-    "S17": ("libJit_s3_S17.so", "f5e3b649fa16d366ebb165b23ba53135f332655a126456edb3f56e9e2b6a752d", "put back the rear-screen words lcdfill_s3_v1"),
-    "C19": ("libJit_s3_C19.so", "29b498b10c224b3d0d4283c7d25f39003af5af1f3bbeb1c880d3b0c123a2c121", "apply the C3 preview routine lcdcycle_s3_v1 (code in appFw.so: the routine, then one branch to it)"),
-    "C20": ("libJit_s3_C20.so", "5b77151c90da75f51f0f2e57a9e22cac03100e95f18493add90f04db4f960d41", "put back the C3 preview routine lcdcycle_s3_v1"),
+    "S16": ("libJit_s3_S16.so", "ffd20cf41d5bf2bc2376ef97f1d78dd1c9e4e307c4f1f4949d8af60e2de46333", "apply the screen words lcdratio32_s3_v1 (3:2 picture on the rear screen and viewfinder, and the focus-frame rectangles: 14 words)"),
+    "S17": ("libJit_s3_S17.so", "1f3afee9fd04b0fa90a6455a8b8c65f108c348c6c4336339da9409a586d317fc", "put back the screen words lcdratio32_s3_v1"),
+    "C19": ("libJit_s3_C19.so", "52fcf5f911dc544f452482e54b8ebf846a6d62c02a7f868e63e669cdff69e7df", "apply the C3 preview routine lcdcycle_s3_v2 (code in appFw.so: the routine, then one branch to it)"),
+    "C20": ("libJit_s3_C20.so", "ee2d1327aff804ac6930e914d9041500b29d5dcaa61bc9c1a2f0be9a8f10f1c5", "put back the C3 preview routine lcdcycle_s3_v2"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
 LEVELS.update({k: {"L": 200, "S": 300, "C": 400}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
@@ -200,6 +200,40 @@ def decode_pages(pages):
     st["where_sizes_occur"] = {k: v[:40] for k, v in sorted(seen.items())}
     if any(n in ("context", "resizework", "resizestate") for n, _ in pages.values()):
         out["scaler_state"] = st
+    # v8: what the screen steps change, and what decides them. The panel's aspect code comes from a panel-type byte (0x1e58b8): type 2 is
+    # a 4:3 panel, 3 a 3:2 panel, 1 a 16:9 one. A 16:9 picture on a 4:3 panel is letterboxed at width x n/d, n and d being the two constants.
+    disp = {}
+    types = mem(0x14B9600, 1), mem(0x14B9730, 1)
+    if None not in types:
+        name = {1: "16:9", 2: "4:3", 3: "3:2"}
+        rear, finder = (1 if types[0][0] >= 4 else types[0][0]), min(types[1][0], 2)
+        disp["panel_types"] = {"rear_0x14b9600": types[0][0], "rear_aspect": name.get(rear, "none"), "viewfinder_0x14b9730": types[1][0], "viewfinder_aspect": name.get(finder, "none")}
+    fit, con = mem(0x1E4C78, 8), mem(0x1E4F98, 8)
+    if fit is not None and con is not None:
+        n, d = con[2], con[6]
+        known = {(9, 16): "16:9, stock", (2, 3): "3:2", (1, 2): "2:1", (5, 12): "2.4:1"}
+        disp["fit_16x9_picture"] = {"on_4x3_panel_0x1e4c78": struct.unpack_from("<I", fit, 0)[0], "on_3x2_panel_0x1e4c7c": struct.unpack_from("<I", fit, 4)[0]}
+        disp["ratio_constants_0x1e4f98"] = {"words": con.hex(), "height": "width x %d/%d" % (n, d),
+                                            "state": known.get((n, d), "unknown") if con[:2] + con[3:6] + con[7:] == bytes.fromhex("4ff00e08bf20") else "not the expected instructions"}
+    rows = {}
+    for t in (0xD4D744, 0xD4D7BC, 0xD4D834):
+        b = mem(t, 0x78)
+        if b is not None:
+            rows[hex(t)] = {"row%d" % r: list(struct.unpack_from("<4H", b, 8 * (5 * r + 3))) for r in range(3)}
+    if rows:
+        disp["frame_rectangles_16x9_picture"] = rows
+    if disp:
+        out["display"] = disp
+    # The camera core's periodic log record (0x1401064, filled at 0x4297d8 when its sensor readings update). It is the one place a dump
+    # shows state from BEFORE the USB session: at dump time the sensor sleeps (drive mode 1) and the live state is the session's.
+    # +4 a time count, +8 the drive mode id, +0xb [context+0x364], +0xc [context+0x368], +0xd a core state number, +0xe [context+0x2a4].
+    # In the ten dumps read so far (modding/A7S3_PORT.md section 28): stills live view 0x5020 reads 2 / 7 / 8; a 4K mode sampled in
+    # standby 2 / 7 / 1; sampled after a recording had started 1 / 9 / 1 (once 2 / 9 / 1). So the state number tells standby from
+    # recording, not a right picture from a wrong one.
+    rec = mem(0x1401064, 0x10)
+    if rec is not None:
+        out["core_log_record"] = {"time": struct.unpack_from("<I", rec, 4)[0], "drive_mode": hex(struct.unpack_from("<H", rec, 8)[0]), "context_0x364": rec[0xB],
+                                  "context_0x368": rec[0xC], "state": rec[0xD], "context_0x2a4": rec[0xE]}
     return out
 
 
@@ -222,7 +256,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v7 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v8 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:
@@ -277,6 +311,10 @@ def selftest(lib):
         if WHICH == "dump":
             d = f.get("decoded", {})
             check(d.get("matrix_equals_file") and len(d.get("stored_records", {})) == 40 and d.get("size_table"), "dump: the pages decode (matrix, 40 records, size table)")
+            dp = d.get("display", {})
+            check(dp.get("ratio_constants_0x1e4f98", {}).get("state") == "16:9, stock" and dp.get("fit_16x9_picture") == {"on_4x3_panel_0x1e4c78": 3, "on_3x2_panel_0x1e4c7c": 3}
+                  and all(v == {"row0": [0, 60, 640, 360], "row1": [0, 38, 640, 404], "row2": [0, 60, 640, 360]} for v in dp.get("frame_rectangles_16x9_picture", {"x": 0}).values())
+                  and "panel_types" in dp, "dump: the display pages decode (stock ratio 9/16, fit words, the three tables' rows, panel types)")
     s, sim, stopped = R.simulate(lib, R.body_run, files={R.LIB_PATH.decode(): b"someone else's"})
     check(stopped and W not in R.sent(s) and D not in R.sent(s), "a foreign libJit.so on the camera: stops, nothing written, nothing deleted")
     s, sim, stopped = R.simulate(lib, R.body_run, files={"/tmp_wbshd/readcheck_result.txt": b"old"})
@@ -337,6 +375,21 @@ def report(session, facts, which):
                 lines.append("  division units: %s" % ss["division_units_0x1400888"])
             for k, v in ss.get("where_sizes_occur", {}).items():
                 lines.append("  %s at %s%s" % (k, ", ".join(v[:10]), " ..." if len(v) > 10 else ""))
+        cl = d.get("core_log_record")
+        if cl:
+            lines.append("camera core's last log record before this session: time %d, drive mode %s, values %d / %d / %d (state 7 = standby, 9 = recording, as seen so far)"
+                         % (cl["time"], cl["drive_mode"], cl["context_0x364"], cl["state"], cl["context_0x2a4"]))
+        dp = d.get("display")
+        if dp:
+            lines.append("display (what the screen steps change):")
+            if "panel_types" in dp:
+                t = dp["panel_types"]
+                lines.append("  panel types: rear %d (%s), viewfinder %d (%s)" % (t["rear_0x14b9600"], t["rear_aspect"], t["viewfinder_0x14b9730"], t["viewfinder_aspect"]))
+            if "ratio_constants_0x1e4f98" in dp:
+                r, ft = dp["ratio_constants_0x1e4f98"], dp["fit_16x9_picture"]
+                lines.append("  a 16:9 picture: height = %s (%s); fit word on a 4:3 panel %d, on a 3:2 panel %d" % (r["height"], r["state"], ft["on_4x3_panel_0x1e4c78"], ft["on_3x2_panel_0x1e4c7c"]))
+            for t, rw in dp.get("frame_rectangles_16x9_picture", {}).items():
+                lines.append("  frame table %s: row 0 %s, row 1 %s, row 2 %s" % (t, rw["row0"], rw["row1"], rw["row2"]))
     session.save_bytes("s3_report.txt", ("\n".join(lines) + "\n").encode())
     for ln in lines[:8] + lines[-6:]:
         session.say(ln)
@@ -406,7 +459,7 @@ def main():
                 "yes" if out.get("library_sent") else "no",
                 {False: "no (confirmed)", True: "YES", None: "not sent" if not out.get("library_sent") and not a.remove_only else "UNKNOWN"}[out.get("library_on_camera_after")]))
             if a.which in WRITE_STEPS:
-                print("This was a WRITE step. A cold boot (battery out for 10 seconds) undoes everything written; switching off does not.")
+                print("This was a WRITE step. A cold boot (battery out for 10 seconds) undoes everything written. On the tester's A7S III the power switch did too: keep the camera on between steps.")
             else:
                 print("Nothing on the camera was changed. Unplug and replug the USB cable before another run; a cold boot (battery out) clears the result file.")
 

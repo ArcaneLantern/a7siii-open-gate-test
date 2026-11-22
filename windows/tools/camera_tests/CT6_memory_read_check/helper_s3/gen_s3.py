@@ -15,7 +15,7 @@ ROOT = HERE.parents[2]
 EX = ROOT / "work/extracted/a7s3_501/0700_part_image/dev"
 DES = ROOT / "modding/designs"
 BASE = 0x108000
-LABEL = "s3read_v7"
+LABEL = "s3read_v8"
 CP_LO, CP_HI = 0xC0000, 0x2100000                     # coprocessor addresses a read may have: its logs (tomco.txt), image and RAM tables
 AVCAM_PHYS, AVCAM_RESERVE = 0x401000000, "@0x401000000"   # as on the A7 IV (memrsv=0x01000000@0x401000000:ex); checked on the camera before any read
 ID_FILES = {"/libmpr.so": "nflasha15/lib/libmpr.so", "/libsencore.so": "nflasha15/lib/libsencore.so", "/libJiritsu.so": "nflasha15/lib/libJiritsu.so"}
@@ -27,7 +27,11 @@ DUMP_RANGES = (("shadow", 0x1019000, 2), ("matrix", 0xF2E000, 3), ("sizetable", 
                # just after them (A7 IV 0x11cf800, 0x11cf838, context 0x11d0680), the resize working structure 0x11b5c40 (0x11e1510),
                # the resize result, division block 0x1400888 and module settings 0x1401ff8 (0x145091c, 0x1450d70, 0x1452488), and the
                # write-buffer ring 0x119a208 (0x11c6878)
-               ("context", 0x11A3000, 4), ("resizework", 0x11B5000, 1), ("resizestate", 0x13FF000, 4), ("wbuf", 0x119A000, 2))
+               ("context", 0x11A3000, 4), ("resizework", 0x11B5000, 1), ("resizestate", 0x13FF000, 4), ("wbuf", 0x119A000, 2),
+               # v8, after the first screen test (modding/A7S3_PORT.md section 27): the display code page with the fit-mode tables 0x1e4c78
+               # and the picture-ratio constants 0x1e4f98, the frame widgets' rectangle tables 0xd4d744.., and the page with the panel-type
+               # bytes the panel's aspect code is taken from (rear panel 0x14b9600, viewfinder 0x14b9730; 0x5f4e04, 0x5f4e16)
+               ("display", 0x1E4000, 1), ("frametab", 0xD4D000, 1), ("paneltype", 0x14B9000, 1))
 
 
 def c_bytes(b):

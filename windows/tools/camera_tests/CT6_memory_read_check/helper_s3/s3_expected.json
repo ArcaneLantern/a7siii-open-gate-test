@@ -1,5 +1,5 @@
 {
- "label": "s3read_v7",
+ "label": "s3read_v8",
  "cp_lo": 786432,
  "cp_hi": 34603008,
  "avcam_phys": 17196646400,
@@ -224,6 +224,21 @@
    "wbuf",
    "0x119a000",
    2
+  ],
+  [
+   "display",
+   "0x1e4000",
+   1
+  ],
+  [
+   "frametab",
+   "0xd4d000",
+   1
+  ],
+  [
+   "paneltype",
+   "0x14b9000",
+   1
   ]
  ],
  "designs": {
