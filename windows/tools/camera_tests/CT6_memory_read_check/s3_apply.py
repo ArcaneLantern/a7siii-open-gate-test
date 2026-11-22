@@ -6,7 +6,7 @@
 NEVER RUN ON A CAMERA (2026-11-21). This is the write kit of the port; it is held back until the read-only steps
 (s3_run.py check and dump) have run on an A7S III and their results match what the port predicts.
 
-  apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v4), L16 output size (outsz2560_s3_v1),
+  apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
            L19 encoder side (ogfile2560_hs_s_s3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
   putback  the reverse, L20, L17, L6. A cold boot (battery out for 10 seconds) also undoes everything.
 
@@ -61,7 +61,7 @@ def last_check():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 ", "s3read_v5 ", "s3read_v6 "))
+            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 ", "s3read_v5 ", "s3read_v6 ", "s3read_v7 "))
             return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
     return None
 
@@ -166,8 +166,12 @@ def main():
     say()
     say("All %d steps passed (%s)." % (len(steps), a.what))
     if a.what == "apply":
-        say("Now: unplug USB, set File Format XAVC HS 4K or XAVC S 4K at 24p (23.98p), dial to movie, look at the picture, record a few seconds.")
-        say("If the camera stops or restarts: do NOT pull the battery yet. Replug USB and run dump_info, then send camera_private.")
+        say(">>> BEFORE you unplug: turn the mode dial to MOVIE. Then unplug USB.")
+        say("    (The camera then starts its picture directly in movie mode. A switch from stills to movie with the patch applied")
+        say("     gave a wrong live view in the last test, until the camera's next start of the picture.)")
+        say("Then: File Format XAVC HS 4K or XAVC S 4K at 24p (23.98p). Watch the picture for 30 seconds, then follow the README (dump, record, dump).")
+        say("If the live view is wrong all the same: leave the dial on movie, replug USB, run dump_info, unplug. That corrected it in the last test.")
+        say("If the camera stops or restarts: do NOT pull the battery yet. Dial to stills, replug USB and run dump_info, then send camera_private.")
         say("To return to stock: battery out for 10 seconds.")
 
 

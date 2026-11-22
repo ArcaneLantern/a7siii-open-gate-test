@@ -34,15 +34,15 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "192da4af0ce1c67ef6a67844f7cc7c21c7fdbf0cd37b3ab9ea5f0ca7a53206ff"),
-        "dump": ("libJit_s3_dump.so", "7d165f9897d1fb98c740dedeefbcfdc59b21214cd74a2532ec99d789bb6c1c7e")}
+PINS = {"check": ("libJit_s3_check.so", "f2f6a3f2b99038591243e05609f908166a5eee64af3816cbbc73611d0c69d17d"),
+        "dump": ("libJit_s3_dump.so", "fbd138900e0c20c506b5b28c3ea74a927ba80d9d03d199c8160253a6a7081459")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
 # and the libraries are not in the published kit unless it was published with --include-write.
 WRITE_STEPS = {
-    "L5": ("libJit_s3_L5.so", "a3a53a64df7d40ba66aa369a5a13c363022372cc8344d7368ecfcdcfbefd4ac1", "apply the sensor-side design ogsq_s3_v4 (sensor cells, two records, the stored record)"),
-    "L6": ("libJit_s3_L6.so", "c227fe54d807ec8fbd2490603b0919baabe1c218c21154dfaae681c29d80b371", "put back the sensor-side design ogsq_s3_v4"),
+    "L5": ("libJit_s3_L5.so", "5bc1bdcee924e1bd30e405fc29c269440b2c36548ede357d8e34c5d21cc4efa3", "apply the sensor-side design ogsq_s3_v5 (sensor cells, two records, the stored record)"),
+    "L6": ("libJit_s3_L6.so", "5ea7f7cac2a2bda8628a3dda9012532c7c508f6ea5ce9603021474ee5249f69c", "put back the sensor-side design ogsq_s3_v5"),
     "L16": ("libJit_s3_L16.so", "ff206663b7df61ef6e20d182bbefba3e5341f2ddf1df588ffb38123f70eadc67", "apply the output size outsz2560_s3_v1 (one word)"),
     "L17": ("libJit_s3_L17.so", "b56744396d5035c3862b276c4e9a85e950c0bbe890accd849bb8102fee0533ba", "put back the output size outsz2560_s3_v1"),
     "L19": ("libJit_s3_L19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites)"),
@@ -216,7 +216,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v6 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v7 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:

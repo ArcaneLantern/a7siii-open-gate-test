@@ -11,8 +11,10 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 - Sensor step v2 fixed that and ran once. The camera's scaler then took the whole picture, as designed, and the raw-frame buffer had room. **But the sensor still delivered only the 16:9 band:** the lower sixth of the picture was black, blacks were purple, and there were line artefacts (also in other 4K modes while the patch was applied). On this sensor the vertical window belongs to the sensor's mode, and v2 had not changed the mode.
 - Sensor step v3 gave 4K 24p the camera's own full-height sensor mode (the one it uses for fast full-frame stills read-out), with that mode's receiver settings and a new 23.976 fps frame timing. It ran on an A7S III. **In one recording the whole sensor area reached the file** (checked against a photo), with stepped tones in the picture and a wrong standby picture before the recording. **On later attempts the picture flickered as soon as movie mode was entered, and the camera froze and restarted.** A battery pull returned it to stock each time.
 - We found an error of ours in v3: one value of the new frame timing was outside the range the camera's own timings use (see `PORT_NOTES.md`). It fits the flicker and the restart, but that it caused them is not shown.
-- **This kit has sensor step v4: v3 with that timing value corrected, and nothing else changed. It has not run on a camera yet. Do not run v3 again.** Flicker, a wrong picture or a restart are still possible. The stepped tones and the standby picture are not addressed in v4. Read "The write step" below before you run it.
-- **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory, and v4 will refuse to apply on top of it.
+- Sensor step v4 was v3 with that timing value corrected. It ran on an A7S III: **no flicker and no restart.** The dumps show the full-height sensor mode and the whole sensor area scaled to 3840 × 2560. Two faults remain from v3: stepped tones in the picture, and a wrong live view when movie mode is entered from stills (it came right at the camera's next start of the picture: after a USB session with the dial on movie, or when a recording started).
+- For the stepped tones we found a mismatch of ours: the stock 4K mode reads the sensor over a 10-bit link, the full-height mode over a 12-bit one, and six words in each of the two picture records still described the 10-bit link (see `PORT_NOTES.md`). That this causes the steps is not shown.
+- **This kit has sensor step v5: v4 with those record words set for the 12-bit link, and nothing else changed. It has not run on a camera yet.** It changes the recording path that worked in v4, so a wrong picture or a restart are possible again. The live view fault is handled by the order of the steps for now: see "How to run it".
+- **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory, and v5 will refuse to apply on top of it.
 
 | Launcher | What it does | Writes to the camera? |
 |---|---|---|
@@ -50,7 +52,7 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **What it changes.** Three groups of bytes in the running camera's memory: the sensor read-out and the two 4K picture records of the image processor (full sensor height instead of the 16:9 band), one size word (3840×2160 becomes 3840×2560), and the encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p. Each step first checks that every byte it is about to change holds its stock value, writes, reads back, and undoes its own writes if anything does not match.
 
-**What we do not know yet.** Whether the corrected frame timing removes the flicker and the restart that v3 showed. Why v3's recording had stepped tones, and why its standby picture was wrong before the first recording. How exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). A battery pull returned the camera to stock after every fault so far.
+**What we do not know yet.** Whether the 12-bit record words remove the stepped tones, and whether the picture stays right with them. Why the live view is wrong when movie mode is entered from stills with the patch applied. How exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). A battery pull returned the camera to stock after every fault so far.
 
 **While it is applied:** use only XAVC HS 4K or XAVC S 4K at 24p. Other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang. The rear screen and viewfinder will probably look squeezed vertically: the screen picture is not corrected on this camera yet. The recorded file is what counts.
 
@@ -60,9 +62,9 @@ What they do to the camera: they switch it to service mode, write one small prog
 2. Pull the battery for 10 seconds, put it back, switch on. **Dial on stills.** Do not go into movie mode yet.
 3. Connect USB and run `windows/open_gate_apply.cmd`. It starts only if your newest saved check or dump says READY. It asks for the firmware version and for a typed YES.
 4. It runs three steps. Between steps it asks you to **unplug and replug the USB cable. Do not switch the camera off and do not pull the battery** until it says all three steps passed.
-5. Unplug USB. Turn the dial to movie and **watch the picture for 30 seconds without recording**. Note what it shows (normal, purple, part missing, flicker).
-6. If it is still running: **leave the dial on movie**, connect USB and run `windows/dump_info.cmd`. This is the standby dump, taken before any recording. Unplug again.
-7. Record 20 to 30 seconds, stop, and play the clip back.
+5. When it says all three steps passed: **turn the dial to movie first, then unplug USB.** The camera then starts its picture directly in movie mode. **Watch the picture for 30 seconds without recording** and note what it shows (normal, purple, part missing, flicker).
+6. If it is still running: **leave the dial on movie**, connect USB and run `windows/dump_info.cmd`. This is the standby dump, taken before any recording. Unplug again. If the live view was wrong in step 5, it should be right after this (it was in the v4 test). Please tell us which it was.
+7. Record 20 to 30 seconds, stop, and play the clip back. For the stepped tones, a dark scene with smooth gradients shows them best.
 8. **Leave the dial on movie**, connect USB and run `windows/dump_info.cmd` again. This dump reads the numbers the camera's scaler is actually using.
 9. To return to stock: battery out for 10 seconds. (`open_gate_putback.cmd` does the same in three steps without a power cut.)
 

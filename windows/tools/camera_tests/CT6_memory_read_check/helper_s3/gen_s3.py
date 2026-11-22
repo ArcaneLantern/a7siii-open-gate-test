@@ -3,7 +3,7 @@
   work/venv/Scripts/python.exe -I -B gen_s3.py
 
 Everything the helper compares against is taken here from the extracted 5.01 update and from
-modding/designs/{ogsq_s3_v4, outsz2560_s3_v1, ogfile2560_hs_s_s3_v1}.json; the helper holds no other constant
+modding/designs/{ogsq_s3_v5, outsz2560_s3_v1, ogfile2560_hs_s_s3_v1}.json; the helper holds no other constant
 about the camera except the addresses listed at the top of this file. Read-only on the inputs.
 """
 import hashlib
@@ -15,7 +15,7 @@ ROOT = HERE.parents[2]
 EX = ROOT / "work/extracted/a7s3_501/0700_part_image/dev"
 DES = ROOT / "modding/designs"
 BASE = 0x108000
-LABEL = "s3read_v6"
+LABEL = "s3read_v7"
 CP_LO, CP_HI = 0xC0000, 0x2100000                     # coprocessor addresses a read may have: its logs (tomco.txt), image and RAM tables
 AVCAM_PHYS, AVCAM_RESERVE = 0x401000000, "@0x401000000"   # as on the A7 IV (memrsv=0x01000000@0x401000000:ex); checked on the camera before any read
 ID_FILES = {"/libmpr.so": "nflasha15/lib/libmpr.so", "/libsencore.so": "nflasha15/lib/libsencore.so", "/libJiritsu.so": "nflasha15/lib/libJiritsu.so"}
@@ -38,7 +38,7 @@ def main():
     cp = (EX / "nflasha8/cpapp-b.bin").read_bytes()
     av = (EX / "nflasha3/av-cam.bin").read_bytes()
     lm = (EX / "nflasha15/lib/libmpr.so").read_bytes()
-    og = json.loads((DES / "ogsq_s3_v4.json").read_text(encoding="utf8"))
+    og = json.loads((DES / "ogsq_s3_v5.json").read_text(encoding="utf8"))
     oz = json.loads((DES / "outsz2560_s3_v1.json").read_text(encoding="utf8"))
     fl = json.loads((DES / "ogfile2560_hs_s_s3_v1.json").read_text(encoding="utf8"))
     assert og["artifact_sha256"] == hashlib.sha256(cp).hexdigest()

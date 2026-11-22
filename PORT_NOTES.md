@@ -154,3 +154,26 @@ The 50-system row (313, 4780, P 239, E 193) was valid and stays. VMAX is unchang
 
 - The two picture records still describe the frame format of the stock 4K sensor mode in several words that follow the read-out type or the line length in every stock record (for example `+0x27c`, `+0x280`, `+0x284`, `+0x294`, `+0x2a8`, and `+0x328` = 5.5 × HMAX). `0xe011`'s own records also start the picture 76 columns later. The tester's frame has a brightness step about that far in from the left edge. Whether this is behind the stepped tones is not known.
 - Why the first standby differed from the recording in the one good run. The drive-mode selector (`0x411798`) takes the 24p or 30p family from the frame-rate setting and has no standby-or-recording input.
+
+## Step v4 on the camera, and step v5 (2026-11-22)
+
+**v4 ran without flicker and without a restart.** Two dumps came back, one in standby with the live view still wrong and one after a recording. Both hold the same configuration: every patch site at its v4 value, the stored record's timing 313, 4788, P 57, E 34, the sensor registers of the full-height mode, and the second scaler taking all 2832 rows into 3840 x 2560. So the sensor was already in the full-height mode while the live view was wrong. The only differences between the two dumps are gain and shutter values: the exposure control reacting to a wrong picture.
+
+**The live view came right by itself** after the first dump's USB session, with no recording. The camera's event log (the coprocessor log region at `0xc0000`) shows a full start of the picture ("IMG INIT", then the live view start) after every USB session. So the fault belongs to the switch from stills live view to movie mode; a fresh start in movie mode gives the right picture. The step that the switch lacks was not found. What was found: the sensor control code picks its sequences by the class of the drive mode id (below `0xa000` movie and live view, `0xa000` and `0xe000` classes capture; `0x86cb90`, `0x86cbca`, `0x86cbf6`), and patched `0x8c0` has a movie id on a sensor mode that stock only runs under capture ids. The sensor link is restarted on every mode change whatever the receiver type (`0x335a94`), so that is not the missing step. For now the instructions have the dial on movie when the last USB session ends.
+
+**The "receiver type" is the sensor link's bit depth.** The function that builds the link parameters (`0x336b30`) reads the second value from the mode's stored record and maps 0, 1, 2, 3 to 16, 14, 12, 10 bits per pixel (tables at `0x336bac` and `0x336bcc`). Stock 4K (5, 3) is a 10-bit link. The full-height mode and the S35 movie modes (0, 2) are 12-bit, the slow stills modes (0, 1) 14-bit. v3 and v4 made 4K 24p a 12-bit link.
+
+**Step v5** (`ogsq_s3_v5`) is v4 with the picture records brought in line with that. In all 46 stock picture records (20 of 10-bit modes, 26 of 12- and 14-bit modes) five words take one value for a 10-bit link and another for the rest, and a sixth is the record's width word plus 9 or plus 5. No other word of the record follows the link format this way. The two records of v3 and v4 still held the 10-bit values:
+
+| Record word | v4 (10-bit link) | v5 (12-bit link) |
+|---|---|---|
+| `+0x274` | `0x222` (width word + 9) | `0x21e` (width word + 5) |
+| `+0x27c` | `0x20002` | 0 |
+| `+0x280` | `0x30003` | 0 |
+| `+0x284` | 8 | 0 |
+| `+0x294` | 7 | 3 |
+| `+0x2a8` | 0 | 1 |
+
+Both records (left `0xbcfff8`, right `0xbd0bb0`) get the same six values; they are the ones the stock S35 4K movie records hold. Every sensor cell, the stored record and every other record byte are v4's.
+
+Not shown: what the first stage does with these words, and that they are behind the stepped tones. Still open after v5: the 76-column and 16-row layout difference between the two sensor formats, the line-length words (`+0x328`, `+0x3b8`), and the switch from stills live view.
