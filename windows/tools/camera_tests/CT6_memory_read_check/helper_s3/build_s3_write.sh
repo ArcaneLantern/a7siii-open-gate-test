@@ -19,5 +19,13 @@ done
 for L in 19 20; do
   "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_ogfile2560_hs_s_s3_v1.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_s3_L$L.so"
 done
+# The rear-screen steps (modding/A7S3_PORT.md section 26): the same levels with other tables. S = screen fill words, C = C3 routine in appFw.so.
+for L in 16 17; do
+  "${CC[@]}" -DLEVEL=$L '-DWORDS_H="expected_words_lcdfill_s3_v1.h"' readcheck.c "$SEN" -o "$H/libJit_s3_S$L.so"
+done
+for L in 19 20; do
+  "${CC[@]}" -DLEVEL=$L '-DMP_H="expected_mp_lcdcycle_s3_v1.h"' -DAVCAM_PHYS=0x401000000UL readcheck.c -o "$H/libJit_s3_C$L.so"
+done
 cd "$H"
 for L in 5 6 16 17 19 20; do echo "$(sha256sum libJit_s3_L$L.so | cut -d' ' -f1) $(stat -c %s libJit_s3_L$L.so) level $L"; done
+for N in S16 S17 C19 C20; do echo "$(sha256sum libJit_s3_$N.so | cut -d' ' -f1) $(stat -c %s libJit_s3_$N.so) step $N"; done

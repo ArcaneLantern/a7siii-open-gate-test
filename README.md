@@ -1,10 +1,17 @@
 # A7S III open gate: test kit (firmware 5.01)
 
-<p><b>The current write tests are UNTESTED</b> they only write to ram, so should remove themselves and return the camera to stock with a battery pull, but they are again, not tested yet.</p?
+<p><b>Open gate works on one tester's A7S III (2026-11-22):</b> a true 3840 × 2560 recording of the whole sensor area at 23.98p. The patch only writes to RAM; a battery pull returns the camera to stock. It has run on one camera so far.</p>
 
 This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S III (ILCE-7SM3). The goal is a true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only and gone after a battery pull.
 
 **Where it stands (2026-11-22):**
+
+- **Sensor step v5, the one in this kit, works.** The tester's report: open gate works, no distorted picture at 24p, the colours are right, and the file holds the full sensor area. The clip is HEVC 3840 × 2560, 23.976 fps, 4:2:2 10-bit, 97.5 Mbit/s (XAVC HS 4K). Both dumps show every patch site applied and the sensor in its full-height mode.
+- **Stay on 4K 24p while it is applied.** Switching to 60p distorted the picture and crashed the tester's camera. A battery pull clears it.
+- **The rear screen shows the picture squeezed into 16:9.** The file is right. Two optional screen steps are new in this kit (rear screen at 3:2, and a preview for anamorphic lenses on the C3 key). **They have not run on an A7S III yet**: see "The rear screen".
+- Not reported yet: XAVC S 4K, autofocus and exposure behaviour, long recordings, a camera set to PAL.
+
+How it got here:
 
 - The two read-only steps have run on an A7S III. The camera's software and every place the patch touches were as predicted.
 - The write step has run twice on an A7S III. All three steps applied, the camera stayed stable and recorded a 3840 × 2560 file, and a battery pull returned it to stock. **But the framing was wrong:** no extra height, and the width was cropped. The cause was found in the dump: the first version changed the picture records of a different video mode.
@@ -13,7 +20,7 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 - We found an error of ours in v3: one value of the new frame timing was outside the range the camera's own timings use (see `PORT_NOTES.md`). It fits the flicker and the restart, but that it caused them is not shown.
 - Sensor step v4 was v3 with that timing value corrected. It ran on an A7S III: **no flicker and no restart.** The dumps show the full-height sensor mode and the whole sensor area scaled to 3840 × 2560. Two faults remain from v3: stepped tones in the picture, and a wrong live view when movie mode is entered from stills (it came right at the camera's next start of the picture: after a USB session with the dial on movie, or when a recording started).
 - For the stepped tones we found a mismatch of ours: the stock 4K mode reads the sensor over a 10-bit link, the full-height mode over a 12-bit one, and six words in each of the two picture records still described the 10-bit link (see `PORT_NOTES.md`). That this causes the steps is not shown.
-- **This kit has sensor step v5: v4 with those record words set for the 12-bit link, and nothing else changed. It has not run on a camera yet.** It changes the recording path that worked in v4, so a wrong picture or a restart are possible again. The live view fault is handled by the order of the steps for now: see "How to run it".
+- Sensor step v5 is v4 with those record words set for the 12-bit link, and nothing else changed. It ran on an A7S III on 2026-11-22 with the result at the top of this list. The live view fault of v4 is handled by the order of the steps: see "How to run it".
 - **If you ran an earlier version: pull the battery for 10 seconds before anything else.** The old patch may still be in the camera's memory, and v5 will refuse to apply on top of it.
 
 | Launcher | What it does | Writes to the camera? |
@@ -22,6 +29,8 @@ This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S I
 | `dump_info.cmd` | The same, plus facts for the port: memory map, the camera's own logs, sensor register state, internal tables | No |
 | `open_gate_apply.cmd` | Applies the open-gate state, in three steps | **Yes: memory only** |
 | `open_gate_putback.cmd` | Puts the three steps back | Yes: memory only |
+| `open_gate_apply_screen.cmd` | The three open-gate steps plus two rear-screen steps. **The screen steps are untested** | **Yes: memory only** |
+| `screen_putback.cmd` | Puts the two screen steps back | Yes: memory only |
 
 Nothing in this kit writes to the camera's firmware or to its settings.
 
@@ -52,9 +61,9 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **What it changes.** Three groups of bytes in the running camera's memory: the sensor read-out and the two 4K picture records of the image processor (full sensor height instead of the 16:9 band), one size word (3840×2160 becomes 3840×2560), and the encoder's tables for XAVC HS 4K and XAVC S 4K at 23.98p and 25p. Each step first checks that every byte it is about to change holds its stock value, writes, reads back, and undoes its own writes if anything does not match.
 
-**What we do not know yet.** Whether the 12-bit record words remove the stepped tones, and whether the picture stays right with them. Why the live view is wrong when movie mode is entered from stills with the patch applied. How exposure and autofocus behave. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). A battery pull returned the camera to stock after every fault so far.
+**What we do not know yet.** Why the live view is wrong when movie mode is entered from stills with the patch applied (the order of the steps below avoids it). How exposure and autofocus behave. Whether XAVC S 4K records as well as XAVC HS 4K did. The sensor is read more slowly in this mode: expect more rolling shutter (about 26 ms top to bottom). A battery pull returned the camera to stock after every fault so far.
 
-**While it is applied:** use only XAVC HS 4K or XAVC S 4K at 24p. Other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang. The rear screen and viewfinder will probably look squeezed vertically: the screen picture is not corrected on this camera yet. The recorded file is what counts.
+**While it is applied:** use only XAVC HS 4K or XAVC S 4K at 24p. **60p distorted the picture and crashed the tester's camera**; other formats, frame rates, S&Q and APS-C/Super 35 are likely to fail or hang too. The rear screen and viewfinder show the picture squeezed vertically into 16:9. The optional screen steps are meant to correct the rear screen (see "The rear screen"); they are untested. The recorded file is what counts.
 
 **How to run it**
 
@@ -83,6 +92,39 @@ What they do to the camera: they switch it to service mode, write one small prog
 
 **If the apply stops part-way:** it says at which step. Pull the battery for 10 seconds to be sure of the camera's state, and send the folder.
 
+## The rear screen (optional, untested on this camera)
+
+With open gate applied, the rear screen shows the whole sensor area squeezed into its 16:9 movie frame. Two more steps correct that. They are the A7 IV kit's screen steps, where they work, moved to this camera's addresses. **Neither has run on an A7S III.** Only run them if you are willing to be the first; a battery pull removes them like everything else.
+
+**What they do**
+
+- **Step 4, the screen at 3:2.** Seven words in the display code's tables: the 16:9 live view fills the 3:2 rear screen, which undoes the squeeze exactly, and the focus frames are told where the picture now is.
+- **Step 5, the C3 key.** A small routine in the camera's application. In movie mode, each press of C3 steps the rear-screen preview: **3:2** (normal lenses), **2:1** (1.33x anamorphic), **2.4:1** (1.6x anamorphic), and back to 3:2. The preview is full width with bars above and below. The recorded file does not change.
+
+**How to run it**
+
+1. Follow "How to run it" above, but start `windows/open_gate_apply_screen.cmd` in step 3. It runs five steps, with an unplug and replug between each.
+2. If open gate is already applied in this power-on, the same launcher works: its first three steps say NOTHING TO DO, and the two screen steps follow. Have the dial on stills while it runs.
+3. When all five have passed: dial to movie, then unplug, as before.
+
+**While they are applied**
+
+- C3 does nothing else in movie mode. In stills and playback it is unchanged.
+- Every 16:9 picture fills the rear screen, so other movie formats look stretched on it. The viewfinder and HDMI are not changed: the viewfinder still shows the squeezed picture.
+- Touch focus near the top and bottom edge may sit a little off its subject.
+
+**Please tell us**
+
+- What the rear screen shows in movie mode after the apply: the whole picture at the right shape (a circle looks round), or still squeezed with bars.
+- What each C3 press does: the three previews in turn, nothing, or something else.
+- Whether the focus frames and the tracking box are drawn in each of the three previews.
+- Whether C3 still does its own job in stills mode.
+- The zipped `windows/camera_private` folder, as always.
+
+**To remove only the screen steps:** press C3 until the preview is back at 3:2, turn the dial to stills, and run `windows/screen_putback.cmd`. Or pull the battery, which removes everything.
+
+**If the camera freezes or restarts on a C3 press:** that would be the new routine. Pull the battery for 10 seconds, apply with `open_gate_apply.cmd` (three steps, no screen steps) and tell us.
+
 ## If something stops
 
 Every stop prints a reason and "Nothing was sent" or what was sent. Please send that text. Common ones:
@@ -93,7 +135,7 @@ Every stop prints a reason and "Nothing was sent" or what was sent. Please send 
 
 ## What is in here
 
-- `windows/`: the launchers, `setup.cmd`, and `tools/` (the scripts, the pinned program files, their source, and the three patch designs).
+- `windows/`: the launchers, `setup.cmd`, and `tools/` (the scripts, the pinned program files, their source, the three patch designs, and the two screen designs with the C3 routine's source in `tools/modding/lcdcycle_s3`).
 - `PORT_NOTES.md`: how the A7 IV patch maps onto the A7S III, what is verified and what is not.
 
 Built on [Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-RE) (vendored under `windows/tools/third_party`, MIT licence).

@@ -1,14 +1,22 @@
 """A7S III (ILCE-7SM3) firmware 5.01: apply, or put back, the open-gate state in the camera's MEMORY.
 
-  python s3_apply.py apply    [--dry-run]
-  python s3_apply.py putback  [--dry-run]
+  python s3_apply.py apply    [--screen] [--dry-run]
+  python s3_apply.py putback  [--screen] [--dry-run]
+  python s3_apply.py screen | screen-putback  [--dry-run]
 
-NEVER RUN ON A CAMERA (2026-11-21). This is the write kit of the port; it is held back until the read-only steps
-(s3_run.py check and dump) have run on an A7S III and their results match what the port predicts.
+The three open-gate steps worked on one tester's A7S III on 2026-11-22 (a true 3840x2560 file of the whole sensor area).
+THE TWO SCREEN STEPS HAVE NEVER RUN ON AN A7S III (2026-11-22); they are the A7 IV's working screen steps at this
+camera's addresses.
 
   apply    three steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
            L19 encoder side (ogfile2560_hs_s_s3_v1). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only.
-  putback  the reverse, L20, L17, L6. A cold boot (battery out for 10 seconds) also undoes everything.
+           With --screen two more: S16 rear screen at 3:2 with the focus frames (lcdfill_s3_v1), C19 the C3 key steps the
+           rear-screen preview 3:2 -> 2:1 -> 2.4:1 in movie mode (lcdcycle_s3_v1). A step that finds its bytes already
+           applied says NOTHING TO DO and counts as passed, so this also adds the screen steps to an applied open gate.
+  putback  the reverse, L20, L17, L6 (with --screen: C20, S17 first). A cold boot (battery out for 10 seconds) also
+           undoes everything.
+  screen / screen-putback   only the two screen steps (S16, C19) or their put back (C20, S17). Put back needs the
+           preview at 3:2: press C3 until it is. The words C3 wrote stay as they are until a cold boot otherwise.
 
 Rules it keeps:
 - It starts only if the newest saved read-only check of this kit says VERDICT READY.
@@ -31,7 +39,7 @@ import ct1_common as c  # noqa: E402
 import s3_run  # noqa: E402
 
 FIRMWARE = s3_run.FIRMWARE
-STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6")}
+STEPS = {"apply": ("L5", "L16", "L19"), "putback": ("L20", "L17", "L6"), "screen": ("S16", "C19"), "screen-putback": ("C20", "S17")}
 RUNNER = HERE / "s3_run.py"
 LISTER = HERE.parent / "CT1_usb_first_contact" / "ct1_stage2_service.py"
 
@@ -114,8 +122,15 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("what", choices=sorted(STEPS))
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
+    ap.add_argument("--screen", action="store_true", help="with apply or putback: the two rear-screen steps as well (3:2 screen, C3 preview cycle)")
     a = ap.parse_args()
     steps = STEPS[a.what]
+    if a.screen:
+        if a.what not in ("apply", "putback"):
+            raise SystemExit("--screen goes with apply or putback. Nothing was sent.")
+        steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
+    applying = a.what in ("apply", "screen")
+    with_screen = a.screen or a.what.startswith("screen")
     for k in steps:                                  # every library must be the pinned one before anything starts
         name, sha, _ = s3_run.WRITE_STEPS[k]
         p = s3_run.S3 / name
@@ -134,13 +149,23 @@ def main():
         say("Dry run only: nothing was sent to any device.")
         return
     chk = last_check()
-    if a.what == "apply" and (chk is None or not chk[1]):
+    if applying and (chk is None or not chk[1]):
         raise SystemExit("The newest saved read-only check %s. Run the check first and get VERDICT READY. Nothing was sent."
                          % ("does not exist" if chk is None else "(%s) does not say READY" % chk[0]))
     say()
     say("This WRITES into the running camera's memory (not its firmware, not its settings).")
-    say("It has %s. A cold boot (battery out for 10 seconds) returns the camera to stock." % ("never been run on an A7S III" if a.what == "apply" else "to follow an apply of this kit"))
-    say("Before you go on: dial on stills, a charged battery, and for apply a camera that was cold booted and has not been in movie mode since.")
+    if applying:
+        say("The three open-gate steps have worked on one A7S III (2026-11-22)." if a.what == "apply" else "This adds the two screen steps to an applied open-gate state.")
+        if with_screen:
+            say("THE TWO SCREEN STEPS HAVE NEVER RUN ON AN A7S III. They are the A7 IV's working screen steps at this camera's addresses.")
+    else:
+        say("It has to follow an apply of this kit.")
+    say("A cold boot (battery out for 10 seconds) returns the camera to stock.")
+    if a.what == "apply":
+        say("Before you go on: dial on stills, a charged battery, and a camera that was cold booted and has not been in movie mode since.")
+        say("(If the open-gate state is already applied in this power-on, its three steps will say NOTHING TO DO: that is fine.)")
+    else:
+        say("Before you go on: a charged battery." + (" Press C3 until the rear screen is back at 3:2." if a.what != "screen" and with_screen else ""))
     if input("Firmware version in the camera's menu: ").strip() != FIRMWARE:
         raise SystemExit("Not %s. Nothing was sent." % FIRMWARE)
     if input("Type YES to write to the camera's memory: ").strip() != "YES":
@@ -160,11 +185,16 @@ def main():
         if rc or which != k or not f or not f.get("ok"):
             say()
             say("STOPPED at step %d (%s): %s" % (n, k, "the session did not finish" if rc or which != k or not f else "outcome " + f["outcome"]))
-            say("Steps before it are %s. To be sure of the camera's state: cold boot it (battery out for 10 seconds)." % ("applied" if a.what == "apply" else "put back"))
+            say("Steps before it are %s. To be sure of the camera's state: cold boot it (battery out for 10 seconds)." % ("applied" if applying else "put back"))
             say("Please send the newest folders in camera_private.")
             raise SystemExit(1)
     say()
     say("All %d steps passed (%s)." % (len(steps), a.what))
+    if with_screen and applying:
+        say("The screen steps: in movie mode the rear screen should now show the whole 3:2 picture, filling the screen.")
+        say("  C3 in movie mode steps the preview: 3:2 -> 2:1 (1.33x anamorphic) -> 2.4:1 (1.6x anamorphic) -> 3:2. The file does not change.")
+        say("  While they are applied C3 does nothing else in movie mode, and every 16:9 picture fills the rear screen (other movie formats look stretched).")
+        say("  Please report: the screen in each of the three modes, the focus frames in each, and anything C3 does that is not this.")
     if a.what == "apply":
         say(">>> BEFORE you unplug: turn the mode dial to MOVIE. Then unplug USB.")
         say("    (The camera then starts its picture directly in movie mode. A switch from stills to movie with the patch applied")

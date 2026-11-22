@@ -177,3 +177,37 @@ The 50-system row (313, 4780, P 239, E 193) was valid and stays. VMAX is unchang
 Both records (left `0xbcfff8`, right `0xbd0bb0`) get the same six values; they are the ones the stock S35 4K movie records hold. Every sensor cell, the stored record and every other record byte are v4's.
 
 Not shown: what the first stage does with these words, and that they are behind the stepped tones. Still open after v5: the 76-column and 16-row layout difference between the two sensor formats, the line-length words (`+0x328`, `+0x3b8`), and the switch from stills live view.
+
+## Step v5 on the camera (2026-11-22): it works
+
+The tester's report: open gate works, no distorted picture at 24p, the colours are right, and the picture is the full sensor area. The clip is HEVC 3840 x 2560 at 23.976 fps, 4:2:2 10-bit, 97.5 Mbit/s, so XAVC HS 4K at a 100M setting. Two dumps came back, one before and one after the recording. Both carry the v5 read helper's label (`s3read_v7`) and show every coprocessor site at its v5 value, both picture records included, the size word at 3840 x 2560, all 101 encoder table sites and the four recorder sites changed, the sensor registers of the full-height mode, and the same scaler numbers as the v4 run (4240 x 2832 into 3840 x 2560).
+
+So the state is: sensor step `ogsq_s3_v5`, size word `outsz2560_s3_v1`, encoder tables `ogfile2560_hs_s_s3_v1`. The record words left at their v4 values (layout words, line-length words) show no visible fault.
+
+Also observed: **switching to 60p with the state applied distorts the picture and crashes the camera.** The rear screen shows the 3:2 picture squeezed into its 16:9 movie frame, because the live view is a 1920 x 1080 frame holding the whole sensor area.
+
+Not reported: whether the live view was right straight after the last unplug with the dial on movie, XAVC S 4K, autofocus and exposure, long recordings, PAL.
+
+## The rear screen and the C3 preview cycle (2026-11-22): built, not run on a camera
+
+The A7 IV kit has two screen steps that work on that camera: the rear screen at 3:2 with the focus frames, and the C3 key stepping the preview 3:2, 2:1, 2.4:1. Every piece they use is in the A7S III 5.01 files, at other addresses:
+
+| Piece | A7 IV 6.02 | A7S III 5.01 | How it compares |
+|---|---|---|---|
+| Display fit-mode function and its three tables | `0x1e4b78` | `0x1e4c28` | byte-identical (148 bytes) |
+| Fit word: 16:9 picture on a 3:2 panel | `0x1e4bcc` | `0x1e4c7c` | 3 (letterbox) in both |
+| Picture-ratio constants for a 16:9 picture (9/16) | `0x1e4dc4`, `0x1e4dc8` | `0x1e4f98`, `0x1e4f9c` | same values, other instructions: the A7S III function has a 100/235 case in front (flag from the frame's own data) |
+| Focus-frame rectangle tables (three) | `0xd7b560`, `0xd7b5d8`, `0xd7b650` | `0xd4d744`, `0xd4d7bc`, `0xd4d834` | byte-identical (120 bytes each) |
+| Key-event function hooked for C3 | `0x1f06594` | `0x1ec53a4` | same code but one string offset |
+| C3 press event, ignored event | `0x2150006`, `0x20f00be` | the same ids | name records in both files |
+| System mode variable, layout request | `0x28ecdf8`, `0x35994dc` | `0x28a1408`, `0x34fa5d0` | same code, same field |
+
+**Screen step** (`lcdfill_s3_v1`, level 16 code): the fit word 3 to 0, so the 1920 x 1080 live view fills the 3:2 rear panel (a vertical stretch of 32/27, the inverse of the squeeze), and the three table entries for a 16:9 picture on the rear panel from (0, 38, 640, 404) to (0, 0, 640, 480), so that the frame widgets still draw. Seven words, eleven guards, the same words and guards as the A7 IV design.
+
+**C3 step** (`lcdcycle_s3_v1`, level 19 code): 1,648 bytes of code after the end of the application's first loadable segment, and one branch to it at the start of the key-event function. On a C3 press in movie mode the routine reads the state from the coprocessor, writes the next state's fit word, ratio constants (9/16, 1/2, 5/12) and frame rectangles, each line read, checked, written and read back, and asks for a fresh layout. The A7 IV routine, with three differences forced by this image: the constants are in conditional instructions, one table entry lies across two 64-byte lines, and the De-Squeeze model variable is not written.
+
+Where the code goes: the first segment ends at file offset `0x502835e`. Its last page is mapped whole (the tester's dump lists the mapping as `0x5029000` bytes from offset 0). `0x5028360` to `0x5028800` is zero in the file; from `0x5028800` the page repeats the first bytes of the data segment, which nothing addresses through this mapping. The routine runs from `0x5028360` to `0x50289d0`, so 464 bytes of it replace those repeated bytes. The write level checks every old byte against the file before it writes anything, writes the code first and the branch last, and puts back in reverse.
+
+Checked offline: the routine in an emulator against a model of the six coprocessor lines (34 cases: the cycle, other modes, other keys, each failure, each guard); the four built libraries in the write emulation (19 cases, with the application mapped as the tester's camera listed it).
+
+Not known until it runs: that the rear panel reports the 3:2 panel code on this camera (the stock behaviour fits it); that system mode 3 is movie here; that the C3 key sends this event on this body; that the camera's own de-squeeze code does not interfere.

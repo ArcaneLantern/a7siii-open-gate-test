@@ -47,9 +47,15 @@ WRITE_STEPS = {
     "L17": ("libJit_s3_L17.so", "b56744396d5035c3862b276c4e9a85e950c0bbe890accd849bb8102fee0533ba", "put back the output size outsz2560_s3_v1"),
     "L19": ("libJit_s3_L19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites)"),
     "L20": ("libJit_s3_L20.so", "3683c64f54784cfb7fde5af0c4b4096cb6cd3d58cc9c3d988c92abd1c9358f86", "put back the encoder-side design ogfile2560_hs_s_s3_v1"),
+    # The rear-screen steps (optional, on top of the open-gate state). S = the same level 16/17 code with the screen words; C = the same
+    # level 19/20 code with the C3 routine for appFw.so. The digits are the level the library reports in its result's first line.
+    "S16": ("libJit_s3_S16.so", "67de1f4042f9f6340ebb0886e7243d20532678960a147cd22f030f72e7821476", "apply the rear-screen words lcdfill_s3_v1 (3:2 fill and the focus-frame rectangles, 7 words)"),
+    "S17": ("libJit_s3_S17.so", "f5e3b649fa16d366ebb165b23ba53135f332655a126456edb3f56e9e2b6a752d", "put back the rear-screen words lcdfill_s3_v1"),
+    "C19": ("libJit_s3_C19.so", "29b498b10c224b3d0d4283c7d25f39003af5af1f3bbeb1c880d3b0c123a2c121", "apply the C3 preview routine lcdcycle_s3_v1 (code in appFw.so: the routine, then one branch to it)"),
+    "C20": ("libJit_s3_C20.so", "5b77151c90da75f51f0f2e57a9e22cac03100e95f18493add90f04db4f960d41", "put back the C3 preview routine lcdcycle_s3_v1"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: 200 + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "C": 400}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
 
 
@@ -358,7 +364,7 @@ def main():
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, S16, S17, C19, C20): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use s3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

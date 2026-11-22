@@ -1,5 +1,5 @@
 @echo off
-rem A7S III (firmware 5.01): apply the 3840x2560 open-gate state. NEVER RUN ON A CAMERA YET.
+rem A7S III (firmware 5.01): apply the 3840x2560 open-gate state (three steps; worked on one A7S III, 2026-11-22).
 rem WRITES into the camera's memory (not firmware, not settings). A cold boot (battery out for 10 seconds) returns it to stock.
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" (
