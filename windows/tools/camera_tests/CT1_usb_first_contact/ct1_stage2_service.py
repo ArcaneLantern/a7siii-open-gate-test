@@ -129,6 +129,8 @@ def libusb_devices():
         msc = list(libusb.MscContext().listDevices(c.SONY_VID))
         vendor = list(libusb.VendorSpecificContext().listDevices(c.SONY_VID))
     except usb.core.NoBackendError:
+        if sys.platform == "darwin":
+            raise c.StopTest("pyusb found no libusb library. Run macos/setup.command again (it installs libusb-package)")
         raise c.StopTest("pyusb found no libusb library. The libusb-win32 driver is not installed yet: "
                          "do the Zadig step for the camera in Mass Storage mode, then run again")
     return msc, [d for d in vendor if d.idProduct in SENSER_PIDS]
@@ -166,14 +168,17 @@ def connect(session):
     except Exception:
         session.results["libusb_backend"] = None
     if len(msc) + len(senser) != 1:
+        hint = "Unplug other Sony USB devices" if sys.platform == "darwin" else "Check the Zadig step and unplug other Sony USB devices"
         raise c.StopTest("libusb sees %d Sony mass-storage and %d Sony service devices; exactly one camera is "
-                         "needed. Check the Zadig step and unplug other Sony USB devices" % (len(msc), len(senser)))
+                         "needed. %s" % (len(msc), len(senser), hint))
     handle = senser[0] if senser else None
     if msc:
         from pmca.usb import MscDevice
         from pmca.usb.driver.generic import libusb
         from pmca.usb.sony import isSonyMscCamera
         inner = libusb.MscContext().openDevice(msc[0])
+        if sys.platform == "darwin":
+            take_over_from_macos(session, inner)
         session.log("note", text="SCSI TEST UNIT READY and INQUIRY through PMCA-RE MscDevice")
         info = MscDevice(inner).getDeviceInfo()
         session.results["msc_usb_id"] = "%04x:%04x" % (msc[0].idVendor, msc[0].idProduct)
@@ -187,7 +192,7 @@ def connect(session):
         handle = wait_for_service_device(session)
         rows = c.print_pnp(session, "after the switch")
         if handle is None:
-            there = [r for r in rows if "PID_0336" in (r.get("instance_id") or "").upper()]
+            there = [r for r in rows if sys.platform == "win32" and "PID_0336" in (r.get("instance_id") or "").upper()]
             if there:
                 session.results["service_device_seen_by_windows"] = c.mask_instance_id(there[0]["instance_id"])
                 raise c.StopTest("EXPECTED on a first run: the camera is in service mode (054C:0336) but that "
@@ -198,6 +203,24 @@ def connect(session):
     session.results["service_interface_class"] = 255         # it was listed by interface class 255
     session.say("Found a camera in service mode")
     return libusb.VendorSpecificContext().openDevice(handle)
+
+
+def take_over_from_macos(session, inner):
+    """macOS keeps its own mass-storage driver on the camera. libusb can talk to it only once that driver lets go,
+    which macOS allows only as root. The card is unmounted first; then PMCA-RE's UsbBackend.reset() detaches the
+    driver from interface 0. Nothing is sent to the camera here."""
+    import os
+    import usb.core
+    if os.geteuid() != 0:
+        raise c.StopTest("macOS holds the camera with its own mass-storage driver, and taking it over needs admin "
+                         "rights. Run the launchers in the macos folder: they ask for your password")
+    c.unmount_sony_disks(session)
+    try:
+        inner.reset()
+    except usb.core.USBError as exc:
+        raise c.StopTest("macOS did not let go of the camera's mass-storage driver (%s)" % exc)
+    session.log("note", text="macOS mass-storage driver detached through PMCA-RE UsbBackend.reset")
+    session.say("macOS let go of the camera")
 
 
 # ------------------------------------------------------------ dry run

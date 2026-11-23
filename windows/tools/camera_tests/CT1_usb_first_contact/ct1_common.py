@@ -11,6 +11,7 @@ Run every CT1 script with the camera environment, isolated:
 """
 import hashlib
 import json
+import plistlib
 import struct
 import subprocess
 import sys
@@ -73,6 +74,19 @@ def use_pmca():
     root = str(PMCA_ROOT)
     if root not in sys.path:
         sys.path.insert(0, root)
+    if sys.platform == "darwin":
+        use_bundled_libusb()
+
+
+def use_bundled_libusb():
+    """macOS: load libusb from the libusb-package wheel (macos/requirements.txt), so no Homebrew is needed. pyusb keeps
+    the first backend it loads, so PMCA-RE's own usb.core.find calls use this one. Without the wheel, pyusb looks for a
+    system libusb itself."""
+    try:
+        import libusb_package
+    except ImportError:
+        return
+    libusb_package.get_libusb1_backend()
 
 
 def use_bk4():
@@ -172,8 +186,13 @@ def mask_serial(serial):
     return ("***" + serial[-2:]) if serial and len(serial) > 2 else "***"
 
 
+OS_NAME = {"win32": "Windows", "darwin": "macOS"}.get(sys.platform, sys.platform)
+
+
 def pnp_sony_devices():
-    """Sony USB devices Windows shows as present, with class and driver service. Read-only."""
+    """Sony USB devices the OS shows as present, with class and driver service. Read-only."""
+    if sys.platform == "darwin":
+        return ioreg_sony_devices()
     command = ("Get-CimInstance Win32_PnPEntity | Where-Object { $_.PNPDeviceID -match 'VID_054C' } | "
                "Select-Object PNPDeviceID, PNPClass, Name, Service, Status | ConvertTo-Json -Compress")
     try:
@@ -188,10 +207,62 @@ def pnp_sony_devices():
              "service": r.get("Service"), "status": r.get("Status")} for r in rows]
 
 
+def ioreg_sony_devices():
+    """Sony USB devices macOS shows as present, from the I/O Registry: interface classes, the drivers on the
+    interfaces, and the whole disks under the device (the memory card in Mass Storage mode). Read-only.
+
+    `ioreg -r` lists only the outermost matches, so a camera behind a hub or dock sits inside the hub's entry:
+    the whole tree is searched."""
+    try:
+        out = subprocess.run(["ioreg", "-a", "-r", "-c", "IOUSBHostDevice", "-l"], capture_output=True, timeout=60).stdout
+        tops = plistlib.loads(out) if out.strip() else []
+    except Exception as exc:                    # listing is evidence only; never fatal
+        return [{"error": str(exc)}]
+    rows = []
+    for dev in (n for top in tops for n in _walk(top)):
+        if dev.get("IOObjectClass") != "IOUSBHostDevice" or dev.get("idVendor") != SONY_VID:
+            continue
+        interfaces = [n for n in dev.get("IORegistryEntryChildren", []) if n.get("IOObjectClass") == "IOUSBHostInterface"]
+        drivers = [d.get("IOObjectClass") for i in interfaces for d in i.get("IORegistryEntryChildren", [])]
+        disks = {n["BSD Name"] for n in _walk(dev) if n.get("IOObjectClass") == "IOMedia" and n.get("Whole") and n.get("BSD Name")}
+        rows.append({"instance_id": "USB %04X:%04X at 0x%08x" % (SONY_VID, dev.get("idProduct", 0), dev.get("locationID", 0)),
+                     "class": ",".join(str(i.get("bInterfaceClass")) for i in interfaces) or None,
+                     "name": dev.get("USB Product Name"), "service": ",".join(dict.fromkeys(drivers)) or "none", "status": None,
+                     "disks": sorted(disks)})
+    return rows
+
+
+def _walk(node):
+    """An I/O Registry entry from `ioreg -a` and everything under it."""
+    yield node
+    for child in node.get("IORegistryEntryChildren", []):
+        yield from _walk(child)
+
+
+def unmount_sony_disks(session):
+    """macOS: unmount the camera's memory card before its mass-storage driver is taken away, so nothing the Mac was
+    writing to the card is cut off. Unmount only: the card is not ejected and nothing is written to it. Stops when
+    the camera can't be found in the I/O Registry: its card might still be mounted."""
+    rows = ioreg_sony_devices()
+    session.log("pnp", label="before the unmount", devices=rows)
+    if not rows or any("error" in r for r in rows):
+        raise StopTest("the camera was not found in the macOS I/O Registry, so its memory card could not be unmounted "
+                       "(%s). Nothing was sent" % (rows[0]["error"] if rows else "no Sony USB device listed"))
+    for row in rows:
+        for disk in row["disks"]:
+            r = subprocess.run(["diskutil", "unmountDisk", "/dev/" + disk], capture_output=True, text=True, timeout=60)
+            text = (r.stdout + r.stderr).strip()
+            session.log("unmount", disk=disk, code=r.returncode, out=text)
+            if r.returncode != 0:
+                raise StopTest("macOS could not unmount the camera's memory card (%s: %s). Close any app showing it "
+                               "(Finder, Photos, Image Capture) and run again" % (disk, text))
+            session.say("Unmounted the camera's memory card (%s)" % disk)
+
+
 def print_pnp(session, label):
     rows = pnp_sony_devices()
     session.log("pnp", label=label, devices=rows)
-    print("Sony USB devices Windows shows (%s):" % label)
+    print("Sony USB devices %s shows (%s):" % (OS_NAME, label))
     for r in rows:
         if "error" in r:
             print("  (listing failed: %s)" % r["error"])

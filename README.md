@@ -50,7 +50,31 @@ Nothing in this kit writes to the camera's firmware or to its settings.
 2. Run `windows/setup.cmd`.
 3. Install the libusb-win32 driver for the camera with [Zadig](https://zadig.akeo.ie): Options, List All Devices, pick the camera, choose libusb-win32, Replace Driver. The first run switches the camera to service mode, where it shows up as a new device (054C:0336): install the driver for that one too, then run the step again.
 
-macOS and Android are not covered yet.
+## macOS, once (new, not run on an A7S III yet)
+
+The macOS kit is the A7 IV kit's macOS port, carried over unchanged apart from the launcher names. It runs the same scripts as Windows (`windows/tools`).
+
+1. Python 3.9 or later: the one macOS offers with the Xcode Command Line Tools (run `xcode-select --install` in Terminal) works, or install it from python.org.
+2. Double-click `macos/setup.command`. It sets up Python and the USB library the scripts use. No Homebrew and no driver are needed.
+3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_putback.command`, `screen_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
+
+Each live run asks for your Mac password: macOS keeps its own driver on the camera's USB connection, and only an administrator can hand the camera over to the script. The script unmounts the camera's memory card first; it does not erase anything on it. The results go to the same `windows/camera_private` folder.
+
+If macOS refuses to open a .command file ("unidentified developer" or "could not verify"), open System Settings > Privacy & Security, scroll down and click "Open Anyway". Or open Terminal, type `bash` and a space, drag the .command file into the window, and press Return.
+
+## Android (new, not run on a camera yet)
+
+`android/A7SIII-OpenGate.apk` runs this kit from a phone connected to the camera by USB-C (or an OTG adapter). It carries exactly the files in `windows/tools` of this commit and runs them unchanged; only the USB access, the dialogs and the folder for the results are the phone's.
+
+1. Install the APK (allow installing from unknown sources). It installs beside the A7 IV app; they do not share anything on the phone.
+2. Set the camera as for the PC (below), and also **USB Power Supply: Off**, or it charges from the phone.
+3. **1. Read-only check** first: the apply starts only after a check on this phone said READY. Then **2. Apply to camera**. The "Screen steps" box chooses between the five-step apply (ticked) and the three open-gate steps only.
+4. When Android asks to open *A7S III Open Gate* for the camera, tick **Always** and press OK. It comes up twice: once in Mass Storage, once in service mode.
+5. When the log says **unplug and plug in again**, do that with the phone cable. Never switch the camera off.
+6. **Stop waiting** ends a wait for the camera. It never interrupts a step that is talking to the camera.
+7. Afterwards, **Export logs** writes a zip to `Download/A7SIII-OpenGate/` on the phone: send that zip back.
+
+**Self-test** and **Dry run** need no camera and send nothing.
 
 ## The read-only steps
 
@@ -145,6 +169,8 @@ Every stop prints a reason and "Nothing was sent" or what was sent. Please send 
 ## What is in here
 
 - `windows/`: the launchers, `setup.cmd`, and `tools/` (the scripts, the pinned program files, their source, the five patch designs, and the C3 routine's source in `tools/modding/lcdcycle_s3`).
+- `macos/`: `setup.command` and one `.command` launcher per Windows launcher; they run `windows/tools`.
+- `android/A7SIII-OpenGate.apk`: the phone app, carrying `windows/tools` as published here.
 - `PORT_NOTES.md`: how the A7 IV patch maps onto the A7S III, what is verified and what is not.
 
 Built on [Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-RE) (vendored under `windows/tools/third_party`, MIT licence).
