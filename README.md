@@ -2,7 +2,11 @@
 
 <p><b>Open gate works on one tester's A7S III (2026-11-22):</b> a true 3840 × 2560 recording of the whole sensor area at 23.98p, with the rear screen at 3:2 and an anamorphic preview on the C3 key. The patch only writes to RAM. It has run on one camera so far.</p>
 
-This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S III (ILCE-7SM3): a true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only. A battery pull removes it, and on the tester's camera so does switching the camera off and on.
+This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S III (ILCE-7SM3): a true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only. A battery pull removes it.
+
+**MP4 headers (L19 v2, matching the A7 IV and ZV-E1): no remux needed.** The encoder step `L19` (`ogfile2560_hs_s_s3_v2`) now also sets the height in the MP4 headers (`tkhd`, the `stsd` sample entry `avc1`/`hvc1`, and Sony's `PROF` box) to `2560`, so editors open clips at 3:2 straight off the card while preserving Sony gyro metadata without an `ffmpeg` remux. Sony's own XML (`M01.XML` beside the clip and the XML inside it) still says 3840 × 2160, 16:9. `--no-meta` (`N19`, or the `open_gate_apply_no_meta` launcher) uses `ogfile2560_hs_s_s3_v1` to keep 3840 × 2160 headers. `L20` puts back either `v2` or `v1`.
+
+**Preflight (`s3read_v9`) and warm power-switch gating (Issue #3):** The read-only check and dump now inspect both MP4 header instructions (`0x223cc4` and `0x223d10` in `libmpr.so`) alongside all 25 coprocessor sites, 4 `L1-comb` sites, and 101 `av-cam.bin` sites. `VERDICT READY (stock preflight)` requires pure stock state (with the existing runtime-filled exception for `stored_record`, `outsize`, and `outsize_guard*`); a coherent applied closing `dump` (with or without `--no-meta` and with runtime `stored_record`) reports `VERDICT READY (open gate applied)`. Mixed or partial states—including a warm power-switch state where coprocessor sites reset to stock while `av-cam.bin` / `libmpr.so` stay applied (Issue #3), a single MP4 header site applied, or partial coprocessor sites—report `VERDICT NOT READY`. Always pull the battery for 10 seconds to return fully to stock; `s3_apply.py` requires an `s3read_v9` check. Offline C and Python regression tests run with `python -m unittest discover -s tests -v`.
 
 **Where it stands (2026-11-23):**
 
@@ -31,9 +35,10 @@ How it got here:
 |---|---|---|
 | `check_readonly.cmd` | Confirms the camera runs the 5.01 software the port was made from and reads what every patch site holds. Verdict READY / NOT READY | No |
 | `dump_info.cmd` | The same, plus facts for the port: memory map, the camera's own logs, sensor register state, internal tables, the display tables | No |
-| `open_gate_apply.cmd` | Applies the default state in five steps: open gate, the screen at 3:2, the C3 preview. Ends with one read-only session | **Yes: memory only** |
-| `open_gate_apply_no_screen.cmd` | Only the three open-gate steps | **Yes: memory only** |
-| `open_gate_putback.cmd` | Puts the five steps back | Yes: memory only |
+| `open_gate_apply.cmd` | Applies the default state in five steps: open gate (with 3840 × 2560 MP4 headers), the screen at 3:2, the C3 preview. Ends with one read-only session | **Yes: memory only** |
+| `open_gate_apply_no_meta.cmd` | Applies open gate without the MP4 header height (`N19`, headers stay 3840 × 2160), plus the screen at 3:2 and C3 preview | **Yes: memory only** |
+| `open_gate_apply_no_screen.cmd` | Only the three open-gate steps (with 3840 × 2560 MP4 headers; accepts `--no-meta`) | **Yes: memory only** |
+| `open_gate_putback.cmd` | Puts the five steps back (puts back either `L19` v2 or `N19` `--no-meta`) | Yes: memory only |
 | `screen_putback.cmd` | Puts the two screen steps back | Yes: memory only |
 
 Nothing in this kit writes to the camera's firmware or to its settings.
@@ -56,7 +61,7 @@ The macOS kit is the A7 IV kit's macOS port, carried over unchanged apart from t
 
 1. Python 3.9 or later: the one macOS offers with the Xcode Command Line Tools (run `xcode-select --install` in Terminal) works, or install it from python.org.
 2. Double-click `macos/setup.command`. It sets up Python and the USB library the scripts use. No Homebrew and no driver are needed.
-3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_screen.command`, `open_gate_putback.command`, `screen_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
+3. Each Windows launcher has a macOS twin with the same name: `macos/check_readonly.command`, `dump_info.command`, `open_gate_apply.command`, `open_gate_apply_no_meta.command`, `open_gate_apply_no_screen.command`, `open_gate_putback.command`, `screen_putback.command`. Everything below that says `.cmd` works the same with the `.command` file.
 
 Each live run asks for your Mac password: macOS keeps its own driver on the camera's USB connection, and only an administrator can hand the camera over to the script. The script unmounts the camera's memory card first; it does not erase anything on it. The results go to the same `windows/camera_private` folder.
 
