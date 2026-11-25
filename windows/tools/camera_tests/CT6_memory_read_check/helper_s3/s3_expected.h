@@ -260,7 +260,11 @@ static const unsigned char B254[] = {112,8};
 static const unsigned char B255[] = {0,10};
 static const unsigned char B256[] = {112,8,0,0};
 static const unsigned char B257[] = {0,10,0,0};
-#define S3_LABEL "s3read_v8"
+static const unsigned char B258[] = {6,14,129,82};
+static const unsigned char B259[] = {6,64,129,82};
+static const unsigned char B260[] = {6,14,129,82};
+static const unsigned char B261[] = {6,64,129,82};
+#define S3_LABEL "s3read_v9"
 #define CP_LO 0xc0000U
 #define CP_HI 0x2100000U
 #define AVCAM_PHYS 0x401000000UL
@@ -314,6 +318,8 @@ static const struct mp_site lm_sites[] = {
     {0x2d44b6UL, 2, B50, B51},
     {0x2d440eUL, 2, B152, B153},
     {0x2d443eUL, 2, B154, B155},
+    {0x223cc4UL, 4, B258, B259},
+    {0x223d10UL, 4, B260, B261},
 };
 static const struct mp_site av_sites[] = {
     {0x38d8f8UL, 16, B52, B53},

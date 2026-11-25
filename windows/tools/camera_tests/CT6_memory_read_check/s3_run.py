@@ -34,8 +34,8 @@ import ct6_level1_run as R  # noqa: E402
 
 FIRMWARE, MODEL, BUILD = "5.01", "ILCE-7SM3", "a7s3_501"
 S3 = HERE / "helper_s3"
-PINS = {"check": ("libJit_s3_check.so", "e8adeae97caab3b26958068de0dcf1dacd76ad8483333b5cf23f91743d6a91dc"),
-        "dump": ("libJit_s3_dump.so", "ad416c29151f435f45aa71c6bb8f4bb9cf24c85bf098945642e92bf76f37f91c")}
+PINS = {"check": ("libJit_s3_check.so", "09271ba258585d272efebeba37b21b9ab57b2957d85a83f1a4c13c865a987ccd"),
+        "dump": ("libJit_s3_dump.so", "6257f74006e9087516807eff35765d1ffc9c16bb41a89087ae81337eaa4c8148")}
 LEVELS = {"check": 101, "dump": 102}              # numbers outside the A7 IV runner's own levels: none of its level-specific code runs
 # THE WRITE STEPS. Each is one library built from the A7 IV helper's write code with this camera's tables (helper_s3/build_s3_write.sh).
 # They change the running camera's memory until a cold boot. They are run through s3_apply.py, never by a launcher of the read-only kit,
@@ -45,8 +45,9 @@ WRITE_STEPS = {
     "L6": ("libJit_s3_L6.so", "5ea7f7cac2a2bda8628a3dda9012532c7c508f6ea5ce9603021474ee5249f69c", "put back the sensor-side design ogsq_s3_v5"),
     "L16": ("libJit_s3_L16.so", "ff206663b7df61ef6e20d182bbefba3e5341f2ddf1df588ffb38123f70eadc67", "apply the output size outsz2560_s3_v1 (one word)"),
     "L17": ("libJit_s3_L17.so", "b56744396d5035c3862b276c4e9a85e950c0bbe890accd849bb8102fee0533ba", "put back the output size outsz2560_s3_v1"),
-    "L19": ("libJit_s3_L19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites)"),
-    "L20": ("libJit_s3_L20.so", "3683c64f54784cfb7fde5af0c4b4096cb6cd3d58cc9c3d988c92abd1c9358f86", "put back the encoder-side design ogfile2560_hs_s_s3_v1"),
+    "L19": ("libJit_s3_L19.so", "f87754d5e563c1b3322ea15d8c8f49096b18d162e4ed91a2cf633cfc14747f07", "apply the encoder-side design ogfile2560_hs_s_s3_v2 (101 + 6 sites: v1 and the MP4 header height)"),
+    "L20": ("libJit_s3_L20.so", "49d8ae83390d67de62d70102587faa48444d27e7c613a65fe26392b63529d3e7", "put back the encoder-side design ogfile2560_hs_s_s3_v2 (also after an apply of v1)"),
+    "N19": ("libJit_s3_N19.so", "85b5882d0fd2f2525a6eab109ed7ee8ea2f53be42351b56af52e2e7f7f47d588", "apply the encoder-side design ogfile2560_hs_s_s3_v1 (101 + 4 sites, without MP4 header height)"),
     # The rear-screen steps (optional, on top of the open-gate state). S = the same level 16/17 code with the screen words; C = the same
     # level 19/20 code with the C3 routine for appFw.so. The digits are the level the library reports in its result's first line.
     "S16": ("libJit_s3_S16.so", "ffd20cf41d5bf2bc2376ef97f1d78dd1c9e4e307c4f1f4949d8af60e2de46333", "apply the screen words lcdratio32_s3_v1 (3:2 picture on the rear screen and viewfinder, and the focus-frame rectangles: 14 words)"),
@@ -55,7 +56,7 @@ WRITE_STEPS = {
     "C20": ("libJit_s3_C20.so", "9de9a4924d4bfc8a2c253168e13c121732dc9868f9a2f350c9eb97b4816ae069", "put back the C3 preview routine lcdcycle_s3_v3"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300, "C": 400}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "C": 400, "N": 500}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
 
 
@@ -85,6 +86,102 @@ def expected():
 
 # ------------------------------------------------------------ reading a result
 
+def coherent_state(lines, facts):
+    """Return 'stock', 'applied', or None from complete s3read_v9 evidence."""
+    spec = expected()
+    header = "s3read %s %s for ILCE-7SM3 5.01; read-only" % (spec["label"], WHICH)
+    if not lines or lines[0] != header or lines[-3:].count("== done") != 1 or facts["problem_lines"]:
+        return None
+    verdicts = [line for line in lines if line.startswith("VERDICT ")]
+    if verdicts == ["VERDICT READY (stock preflight)"]:
+        mode = "stock"
+    elif verdicts == ["VERDICT READY (open gate applied)"]:
+        mode = "applied"
+    else:
+        return None
+    hashes = re.findall(r" sha256 ([0-9a-f]{64})  SAME as the 5\.01 update$", "\n".join(lines), re.M)
+    if facts["identity_differs"] or sorted(hashes) != sorted([*spec["id_files"].values(), *spec["id_pages"].values()]):
+        return None
+
+    # Match addresses as well as counts: a duplicate row cannot stand in for a missing read.
+    if len(facts["coprocessor_sites"]) != sum(1 for ln in lines if ln.startswith("site ")):
+        return None
+    sensor = {int(row["address"], 16): row for row in spec["cp_sites"]}
+    for row in facts["coprocessor_sites"]:
+        want = sensor.pop(int(row["address"], 16), None)
+        if not want or row["length"] != want["length"] or row["name"] != want["name"]:
+            return None
+        name, state, soft = want["name"], row["state"], want["soft"]
+        runtime = state == "OTHER (not counted: filled at run time)"
+        if not soft:
+            if state not in ("STOCK", "TARGET"):
+                return None
+            if (mode == "stock" and state != "STOCK") or (mode == "applied" and state != "TARGET"):
+                return None
+        else:
+            if state not in ("STOCK", "TARGET") and not runtime:
+                return None
+            if name == "stored_record":
+                if mode == "stock" and state not in ("STOCK", "OTHER (not counted: filled at run time)"):
+                    return None
+                if mode == "applied" and state not in ("TARGET", "OTHER (not counted: filled at run time)"):
+                    return None
+            elif name == "outsize":
+                if mode == "stock" and state not in ("STOCK", "OTHER (not counted: filled at run time)"):
+                    return None
+                if mode == "applied" and state != "TARGET":
+                    return None
+            elif name in ("outsize_guard0", "outsize_guard1"):
+                if mode == "stock" and state not in ("STOCK", "OTHER (not counted: filled at run time)"):
+                    return None
+                if mode == "applied" and state != "STOCK":
+                    return None
+            else:
+                return None
+    if sensor:
+        return None
+
+    design_path = HERE.parents[1] / "modding/designs/ogfile2560_hs_s_s3_v2.json"
+    try:
+        design = json.loads(design_path.read_text(encoding="utf8"))
+    except (OSError, ValueError):
+        return None
+    unseen = {("lm" if site["binary"] == "libmpr.so" else "av", int(site["file_off"], 16)): (site["old"], site["new"])
+              for site in design["patches"]}
+    if sum(kind == "lm" for kind, _ in unseen) != spec["lm_sites"] or len(unseen) != spec["lm_sites"] + spec["av_sites"]:
+        return None
+    hdr_offsets = (0x223CC4, 0x223D10)
+    hdr_states = []
+    for line in lines:
+        if not line.startswith(("lm ", "av ")):
+            continue
+        row = re.fullmatch(r"(lm|av) (0x[0-9a-f]+)(?: at 0x[0-9a-f]+)? bytes ([0-9a-f]+)  (STOCK|TARGET)", line)
+        if not row:
+            return None
+        key = (row[1], int(row[2], 16))
+        pair = unseen.pop(key, None)
+        if not pair:
+            return None
+        old_hex, new_hex = pair
+        if row[3] != (old_hex if row[4] == "STOCK" else new_hex):
+            return None
+        if key[0] == "lm" and key[1] in hdr_offsets:
+            if mode == "stock" and row[4] != "STOCK":
+                return None
+            hdr_states.append(row[4])
+        else:
+            if (mode == "stock" and row[4] != "STOCK") or (mode == "applied" and row[4] != "TARGET"):
+                return None
+    if unseen:
+        return None
+    if mode == "applied" and sorted(hdr_states) not in (["STOCK", "STOCK"], ["TARGET", "TARGET"]):
+        return None
+    guards = [line.split()[1] for line in facts["avcam_guards"] if line.endswith("  SAME")]
+    if len(guards) != len(facts["avcam_guards"]) or sorted(guards) != sorted(spec["av_guards"]):
+        return None
+    return mode
+
+
 def check_result(data):
     """The facts of a result file. Keys the A7 IV runner prints, plus this helper's own under "s3"."""
     if WHICH in WRITE_STEPS:
@@ -104,12 +201,17 @@ def check_result(data):
         m = re.match(r"site (\S+) (0x[0-9a-f]+) len (\d+)(?: bytes (?:differing from stock )?(\S+))?  (STOCK|TARGET|OTHER.*|NOT READ)$", ln)
         if m:
             sites.append({"name": m.group(1), "address": m.group(2), "length": int(m.group(3)), "shown": m.group(4), "state": m.group(5)})
-    s3 = {"header": head, "verdict": verdict, "ready": verdict.startswith("VERDICT READY"),
+    s3 = {"header": head, "verdict": verdict,
           "identity_same": count(r"SAME as the 5\.01 update$"), "identity_differs": count(r"DIFFERS from the 5\.01 update$"),
           "coprocessor_sites": sites, "libmpr_sites": [ln for ln in lines if ln.startswith("lm ")],
           "avcam_stock": count(r"^av .*  STOCK$"), "avcam_target": count(r"^av .*  TARGET$"), "avcam_other": count(r"^av .*  OTHER$"),
           "avcam_guards": [ln for ln in lines if ln.startswith("guard ")], "problem_lines": [ln for ln in lines if ln.startswith("!!")],
           "pages": len(pages)}
+    state = coherent_state(lines, s3)
+    s3["state"] = state or "not_ready"
+    s3["ready"] = state in ("stock", "applied")
+    if not s3["ready"]:
+        s3["verdict"] = "VERDICT NOT READY"
     cmd = re.search(r"== file /proc/cmdline\n(.*?)\n== end", text, re.S)
     ver = re.search(r"== file /proc/version\n(.*?)\n== end", text, re.S)
     s3["kernel_command_line"], s3["kernel_version"] = (cmd.group(1).strip() if cmd else None), (ver.group(1).strip() if ver else None)
@@ -256,7 +358,7 @@ def run_helper(data):
     try:
         import emu_s3
     except Exception:
-        text = "s3read s3read_v8 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT READY (canned)\n== done\n" % WHICH
+        text = "s3read s3read_v9 %s for ILCE-7SM3 5.01; read-only\n== file /proc/version\nLinux (simulated)\n\n== end 18 bytes\n== summary\nVERDICT NOT READY (simulated transport only)\n== done\n" % WHICH
         return text.encode(), "canned"
     r, text = emu_s3.run(bytes(data))
     if r.bad:
@@ -304,10 +406,12 @@ def selftest(lib):
     f = r.get("result", {}).get("s3", {})
     if WHICH in WRITE_STEPS:
         check(f.get("ok") and r["result"]["header_ok"], "normal run: the step's result is read as DONE")
+    elif sim.how == "canned":
+        check(not f.get("ready"), "canned transport result has no measured sites and cannot certify READY")
     else:
         check(f.get("ready") and not f.get("identity_differs"), "normal run: the %s helper reports a stock 5.01 camera as READY" % sim.how)
     if sim.how == "emulated":
-        check(len(f["coprocessor_sites"]) == len(expected()["cp_sites"]) and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == 4, "normal run: every coprocessor site, 4 libmpr and 101 av-cam sites are reported")
+        check(len(f["coprocessor_sites"]) == len(expected()["cp_sites"]) and f["avcam_stock"] == 101 and len(f["libmpr_sites"]) == expected()["lm_sites"], "normal run: every coprocessor site, %d libmpr and 101 av-cam sites are reported" % expected()["lm_sites"])
         if WHICH == "dump":
             d = f.get("decoded", {})
             check(d.get("matrix_equals_file") and len(d.get("stored_records", {})) == 40 and d.get("size_table"), "dump: the pages decode (matrix, 40 records, size table)")
@@ -417,7 +521,7 @@ def main():
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, S16, S17, C19, C20): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, C19, C20): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use s3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))
@@ -459,7 +563,7 @@ def main():
                 "yes" if out.get("library_sent") else "no",
                 {False: "no (confirmed)", True: "YES", None: "not sent" if not out.get("library_sent") and not a.remove_only else "UNKNOWN"}[out.get("library_on_camera_after")]))
             if a.which in WRITE_STEPS:
-                print("This was a WRITE step. A cold boot (battery out for 10 seconds) undoes everything written. On the tester's A7S III the power switch did too: keep the camera on between steps.")
+                print("This was a WRITE step. A cold boot (battery out for 10 seconds) undoes everything written. Keep the camera on between steps; a warm power switch can leave the encoder side applied (pull the battery for 10 seconds to return fully to stock).")
             else:
                 print("Nothing on the camera was changed. Unplug and replug the USB cable before another run; a cold boot (battery out) clears the result file.")
 

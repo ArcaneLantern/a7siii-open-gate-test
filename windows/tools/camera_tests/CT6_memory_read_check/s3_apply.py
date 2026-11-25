@@ -1,36 +1,36 @@
 """A7S III (ILCE-7SM3) firmware 5.01: apply, or put back, the open-gate state in the camera's MEMORY.
 
-  python s3_apply.py apply    [--no-screen] [--dry-run]
+  python s3_apply.py apply    [--no-screen] [--no-meta] [--dry-run]
   python s3_apply.py putback  [--no-screen] [--dry-run]
   python s3_apply.py screen | screen-putback  [--dry-run]
   (apply and screen take --no-movie-session to leave out the closing read-only session)
 
 THE DEFAULT STATE OF THE A7S III (the owner, 2026-11-23): open gate with the screen steps. On one tester's camera
 (2026-11-22) it records a true 3840x2560 file of the whole sensor area, the rear screen shows the picture at 3:2, and
-C3 steps the preview. New in this kit and not run yet: a fourth C3 preview, 2.25:1 for 1.5x lenses.
+C3 steps the preview. New in this kit: MP4 header height (3840x2560 in tkhd, stsd, PROF) in L19 v2, and a fourth C3 preview, 2.25:1 for 1.5x lenses.
 
   apply    five steps, each its own USB session: L5 sensor side (ogsq_s3_v5), L16 output size (outsz2560_s3_v1),
-           L19 encoder side (ogfile2560_hs_s_s3_v1), S16 rear screen and viewfinder at 3:2 with the focus frames
+           L19 encoder side and MP4 header height (ogfile2560_hs_s_s3_v2), S16 rear screen and viewfinder at 3:2 with the focus frames
            (lcdratio32_s3_v1), C19 the C3 key steps the preview 3:2 -> 2:1 -> 2.25:1 -> 2.4:1 in movie mode
            (lcdcycle_s3_v3). Afterwards: XAVC HS 4K or XAVC S 4K at 23.98p only. With --no-screen only the first three.
+           --no-meta: N19 (ogfile2560_hs_s_s3_v1) instead of L19, leaving MP4 headers at 3840x2160.
            A step that finds its bytes already applied says NOTHING TO DO and counts as passed.
-  putback  the reverse: C20, S17, L20, L17, L6 (with --no-screen the last three). The screen part needs the preview
-           at 3:2: press C3 until it is. A cold boot (battery out for 10 seconds) also undoes everything.
+  putback  the reverse: C20, S17, L20, L17, L6 (with --no-screen the last three). L20 also puts back an apply made with
+           --no-meta. The screen part needs the preview at 3:2: press C3 until it is. A cold boot (battery out for 10 seconds) also undoes everything.
   screen / screen-putback   only the two screen steps (S16, C19) or their put back (C20, S17).
 
-The closing session (apply and screen). After the steps, the live view is glitchy (purple, lower part black) whenever
-movie mode is entered from stills; a read-only dump session taken with the dial on movie, or the start of a recording,
-corrects it until the next switch from stills (the tester, 2026-11-22). So the script ends by asking for the dial on
-MOVIE and an unplug and replug, and runs the read-only dump itself. Nothing is written in that session.
+The MP4 header height (L19 v2, matching the A7 IV and ZV-E1): the file's tkhd, its stsd entry and Sony's PROF box say 3840x2560, so
+editors open it at 3:2 without a remux (preserving Sony gyro metadata). Sony's XML (M01.XML beside the file, and the one inside it)
+still says 3840x2160 16:9. Warm power-switch warning (Issue #3): switching the camera off and on without pulling the battery can leave
+the main-processor encoder side (av-cam.bin and libmpr.so, including MP4 headers) applied while coprocessor sites reset to stock.
+Pull the battery for 10 seconds to return everything to stock.
 
 Rules it keeps:
-- It starts only if the newest saved read-only check of this kit says VERDICT READY.
+- It starts only if the newest saved read-only check of this kit (s3read_v9) says VERDICT READY.
 - It stops at the first step that does not end in DONE or NOTHING TO DO, and says what state that leaves.
 - Each step is one pinned library; the runner (s3_run.py) refuses any other bytes.
 Nothing is written to a firmware file or to the camera's settings. What is written lives in the running camera's
-memory. A cold boot (battery out for 10 seconds) removes it. On the tester's A7S III switching the camera off and on with
-the power switch removed it as well (reported 2026-11-22; on the A7 IV it does not), so the camera must stay on from the
-first step to the last.
+memory. A cold boot (battery out for 10 seconds) removes it. Keep the camera switched on from the first step to the last.
 """
 import argparse
 import json
@@ -69,15 +69,15 @@ def sessions():
 
 
 def last_check():
-    """The newest saved read-only check that fetched a result: (folder name, ready?) or None. A check that stopped before the camera
-    answered (no driver yet, no camera seen, an old result on the RAM disk: all seen on the first A7S III run) says nothing and is skipped.
-    A result of the first helper build (s3read_v1) is not accepted: its verdict was wrong on a stock camera."""
+    """The newest saved read-only check or dump that fetched a result: (folder name, ready?) or None. A session that stopped
+    before the camera answered is skipped. Only s3read_v9 results count; both a stock preflight and a coherent applied
+    closing dump (with or without --no-meta, --no-screen, or runtime stored_record) report ready, while mixed/partial states do not."""
     for folder, man in sessions():
         res = man.get("results", {})
         f = (res.get("ct6", {}).get("result") or {}).get("s3")
         if res.get("which") in ("check", "dump") and f:       # a dump makes every check the check makes, and gives the same verdict
-            current = any(v in f.get("header", "") for v in ("s3read_v2 ", "s3read_v3 ", "s3read_v4 ", "s3read_v5 ", "s3read_v6 ", "s3read_v7 ", "s3read_v8 "))
-            return folder.name, current and bool(f.get("ready")) and not f.get("identity_differs")
+            current = f.get("header") == "s3read s3read_v9 %s for ILCE-7SM3 5.01; read-only" % res["which"]
+            return folder.name, current and f.get("ready") is True and not f.get("identity_differs")
     return None
 
 
@@ -178,15 +178,20 @@ def main():
     ap.add_argument("what", choices=sorted(STEPS))
     ap.add_argument("--dry-run", action="store_true", help="show the steps and what each would send; nothing is sent")
     ap.add_argument("--no-screen", action="store_true", help="with apply or putback: only the three open-gate steps, without the two screen steps")
+    ap.add_argument("--no-meta", action="store_true", help="with apply: the encoder step without the MP4 header height (N19, ogfile2560_hs_s_s3_v1): the headers say 3840x2160 as before")
     ap.add_argument("--screen", action="store_true", help="accepted and ignored: the screen steps are part of apply and putback now")
     ap.add_argument("--no-movie-session", action="store_true", help="with apply or screen: leave out the closing read-only session with the dial on movie")
     a = ap.parse_args()
     steps = STEPS[a.what]
     if a.no_screen and a.what not in ("apply", "putback"):
         raise SystemExit("--no-screen goes with apply or putback. Nothing was sent.")
+    if a.no_meta and a.what != "apply":
+        raise SystemExit("--no-meta goes with apply (putback's L20 puts back either encoder step). Nothing was sent.")
     with_screen = not a.no_screen
     if a.what in ("apply", "putback") and with_screen:
         steps = steps + STEPS["screen"] if a.what == "apply" else STEPS["screen-putback"] + steps
+    if a.no_meta:
+        steps = tuple("N19" if k == "L19" else k for k in steps)
     applying = a.what in ("apply", "screen")
     for k in steps:                                  # every library must be the pinned one before anything starts
         name, sha, _ = s3_run.WRITE_STEPS[k]
@@ -220,8 +225,9 @@ def main():
             say("If screen steps of an earlier kit are still in the camera's memory: switch the camera off and on, or pull the battery, first.")
     else:
         say("It has to follow an apply of this kit.")
-    say("A cold boot (battery out for 10 seconds) returns the camera to stock. On the tester's camera the power switch did too:")
-    say("so KEEP THE CAMERA SWITCHED ON from now until the script says it is finished.")
+    say("A cold boot (battery out for 10 seconds) returns the camera to stock. A warm power switch (without pulling the battery) can leave")
+    say("the encoder side applied while coprocessor sites reset to stock (Issue #3): so pull the battery for 10 seconds before starting, and")
+    say("KEEP THE CAMERA SWITCHED ON from now until the script says it is finished.")
     if a.what == "apply":
         say("Before you go on: dial on stills, a charged battery, and a camera that was cold booted and has not been in movie mode since.")
         say("(If the open-gate state is already applied in this power-on, its three steps will say NOTHING TO DO: that is fine.)")
@@ -266,8 +272,10 @@ def main():
             movie_session()
         say()
         say("Use only XAVC HS 4K or XAVC S 4K at 24p (23.98p) while it is applied: 60p distorted the picture and crashed the tester's camera.")
+        if "L19" in steps:
+            say("The MP4 headers say 3840x2560 (editors open the file at 3:2 without a remux, keeping Sony gyro metadata); Sony's XML still says 3840x2160 16:9.")
         say("If the camera stops or restarts: do NOT pull the battery yet. Dial to stills, replug USB and run dump_info, then send camera_private.")
-        say("To return to stock: battery out for 10 seconds. (Switching off and on did it too on the tester's camera.)")
+        say("To return to stock: battery out for 10 seconds (a warm power switch alone can leave the encoder side / MP4 headers applied — Issue #3).")
 
 
 if __name__ == "__main__":

@@ -3,14 +3,31 @@
 # Same pinned flags as helper/rebuild.sh; linked against the A7S III 5.01 libsencore.so for its three imports.
 set -e
 H="$(cd "$(dirname "$0")" && pwd)"
-SEN="$H/../../../work/extracted/a7s3_501/0700_part_image/dev/nflasha15/lib/libsencore.so"
+if [ -n "${S3_LIBSENCORE:-}" ]; then
+  SEN="$S3_LIBSENCORE"
+elif [ -f "$H/../../../work/extracted/a7s3_501/0700_part_image/dev/nflasha15/lib/libsencore.so" ]; then
+  SEN="$H/../../../work/extracted/a7s3_501/0700_part_image/dev/nflasha15/lib/libsencore.so"
+else
+  SEN="$H/../../../../../../firmwares/a7siii/ghidra_targets/libsencore.so"
+fi
+if [ -n "${ZIG_PYTHON:-}" ]; then
+  PY="$ZIG_PYTHON"
+elif [ -x "$H/../../../work/venv_zig/Scripts/python.exe" ]; then
+  PY="$H/../../../work/venv_zig/Scripts/python.exe"
+else
+  PY="python3"
+fi
 cd "$H"
 case "$1" in
   check) D=0 ;;
   dump) D=1 ;;
   *) echo "usage: build_s3.sh check|dump <out>"; exit 2 ;;
 esac
-../../../work/venv_zig/Scripts/python.exe -m ziglang cc -target aarch64-linux-gnu -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -nostdlib -ffreestanding \
+"$PY" -m ziglang cc -target aarch64-linux-gnu -std=gnu11 -O1 -Wall -Wextra -Werror -fPIC -shared -nostdlib -ffreestanding \
   -fno-stack-protector -fno-builtin -fno-asynchronous-unwind-tables -Wl,-soname,libJit.so -Wl,--no-undefined -Wl,-z,now -g0 -s -Wl,-z,max-page-size=4096 \
   -DDUMP=$D s3read.c "$SEN" -o "$2"
-echo "$(sha256sum "$2" | cut -d' ' -f1) $(stat -c %s "$2") $1"
+if command -v sha256sum >/dev/null 2>&1; then
+  echo "$(sha256sum "$2" | cut -d' ' -f1) $(wc -c < "$2" | tr -d ' ') $1"
+else
+  echo "$(shasum -a 256 "$2" | cut -d' ' -f1) $(wc -c < "$2" | tr -d ' ') $1"
+fi
