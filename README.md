@@ -73,7 +73,7 @@ If macOS refuses to open a .command file ("unidentified developer" or "could not
 
 1. Install the APK (allow installing from unknown sources). It installs beside the A7 IV app; they do not share anything on the phone.
 2. Set the camera as for the PC (below), and also **USB Power Supply: Off**, or it charges from the phone.
-3. **1. Read-only check** first: the apply starts only after a check on this phone said READY. Then **2. Apply to camera**. The "Screen steps" box chooses between the five-step apply (ticked) and the three open-gate steps only.
+3. **1. Read-only check** first: the apply starts only after a check on this phone said READY. Then **2. Apply to camera**. The "Screen steps" box chooses between the five-step apply (ticked) and the three open-gate steps only. The "MP4 headers" box (app 0.2, ticked by default) applies `L19` with 3840 × 2560 headers; untick it for `--no-meta` (`N19`, headers stay 3840 × 2160). **Put back** undoes either.
 4. When Android asks to open *A7S III Open Gate* for the camera, tick **Always** and press OK. It comes up twice: once in Mass Storage, once in service mode.
 5. When the log says **unplug and plug in again**, do that with the phone cable. Never switch the camera off.
 6. **Stop waiting** ends a wait for the camera. It never interrupts a step that is talking to the camera.
