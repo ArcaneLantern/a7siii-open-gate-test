@@ -1,0 +1,38 @@
+{
+ "design": "outsz4224_s3_v1",
+ "build": "a7s3_501",
+ "camera": "ILCE-7SM3 (A7S III), firmware 5.01",
+ "kind": "ram_words",
+ "title": "Output size of the stock 4K movie request: 3840 x 2160 -> 4224 x 2816 (size class 3, second entry)",
+ "status": "the word and guards of outsz2560_s3_v1 (which runs on the camera, F979) with another size; never run on a camera",
+ "generated_by": "build/build_outsz_s3.py",
+ "ported_from": "outsz2560_v1 (A7 IV 6.02, RAM 0x143c7bc)",
+ "sites": [
+  {
+   "ram_address": "0x13ec2e4",
+   "old": "000f7008",
+   "new": "8010000b",
+   "what": "size class 3, second entry: width, height"
+  }
+ ],
+ "guards": [
+  {
+   "ram_address": "0x13ec2dc",
+   "bytes": "000f70083e040000",
+   "what": "size class 3, first entry and the raw write buffer id"
+  },
+  {
+   "ram_address": "0x13ec2e8",
+   "bytes": "d9020000",
+   "what": "the output buffer's memory id"
+  }
+ ],
+ "precondition": "a movie mode has run its size set-up (the table is zero before); the camera is on stills when the word is written",
+ "restore": "the old word, or a cold boot",
+ "not_shown": [
+  "the output records' format code on this camera (taken as 2, 1.25 bytes per pixel: 3840 x 2560 records in the stock units)",
+  "anything on a camera"
+ ],
+ "goes_with": "dmm7slot_s3_v1 FIRST (a plane of 14,868,480 bytes at 1.25 bytes per pixel does not fit the stock 13,271,040-byte units of id 0x2d9), ogh2816_s3_v1 (front end 4240 x 2816; the second scaler takes 4224 x 2816 at scale 1) and ogfile4224_s3_v1",
+ "division_job": "the A7S III's own job 0x444a74 accepts 4240 x 2816 -> 4224 x 2816 with two units of 2112 (build/division_sizes_s3.py); 4240 wide is refused"
+}

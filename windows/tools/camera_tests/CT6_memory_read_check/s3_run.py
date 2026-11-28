@@ -54,10 +54,25 @@ WRITE_STEPS = {
     "S17": ("libJit_s3_S17.so", "1f3afee9fd04b0fa90a6455a8b8c65f108c348c6c4336339da9409a586d317fc", "put back the screen words lcdratio32_s3_v1"),
     "C19": ("libJit_s3_C19.so", "3a90cc6e280826c7f3aa70eb4aedef40aca63eb7c5b59957d9b6a6cfd88bde0f", "apply the C3 preview routine lcdcycle_s3_v3 (3:2, 2:1, 2.25:1, 2.4:1; code in appFw.so: the routine, then one branch to it)"),
     "C20": ("libJit_s3_C20.so", "9de9a4924d4bfc8a2c253168e13c121732dc9868f9a2f350c9eb97b4816ae069", "put back the C3 preview routine lcdcycle_s3_v3"),
+    # THE 4224x2816 STATE (2026-11-28; NOT RUN ON A CAMERA): the central 4224 x 2816 of the sensor's 4240 x 2832, pixel for pixel. The same
+    # levels with other tables: H = the sensor side with the first stage passed one to one, D = the output planes, K = output size and encoder
+    # side, J = the encoder side without the MP4 header size, R = the encoder side with the 100M settings at 300 Mbps.
+    "H5": ("libJit_s3_H5.so", "5653609729346837c9bcd16254775f7f779ee282ad27e71ff794143fd624d039", "apply the sensor-side design ogh2816_s3_v1 (ogsq_s3_v5's sensor cells; the two records with a first stage of 2832 rows passed one to one; stored record 27/32)"),
+    "H6": ("libJit_s3_H6.so", "b51d1f2898af9ea205a452c4888a430346faac6e3d6e988499d91abeb7284346", "put back the sensor-side design ogh2816_s3_v1"),
+    "D16": ("libJit_s3_D16.so", "f5768f52237358762d341069f0b7b591e404e8266ed5f8c601bf0ee81644054f", "apply the output planes dmm7slot_s3_v1 (ten words: seven 4K planes of 14,942,208 bytes, as the FX6 kit's memory step)"),
+    "D17": ("libJit_s3_D17.so", "a16da246cc8dad613ff0f36a4e36c9fbd88db9c67a9173d5b73d90c8c5eb2424", "put back the output planes dmm7slot_s3_v1"),
+    "K16": ("libJit_s3_K16.so", "097534011011c2e5ac5c9d5298280d0ffa3bb063da0beada7d56d248951e8752", "apply the output size outsz4224_s3_v1 (one word: 4224 x 2816)"),
+    "K17": ("libJit_s3_K17.so", "47f32a168dcd8db7390dc817fd64896931a40036f0c958e94a5ba3207e1d17d5", "put back the output size outsz4224_s3_v1"),
+    "K19": ("libJit_s3_K19.so", "3b196f0fbd48a6b57539fc93ebd4a3335b360efacc8b2a3ac2ce92301c61a1eb", "apply the encoder-side design ogfile4224_s3_v1 (205 + 13 sites: 4224 x 2816 on both encoder cores, and the MP4 header size)"),
+    "K20": ("libJit_s3_K20.so", "a128eb484c41c00311059783093933e917d97492637a2e3e00f347b5e10fb09a", "put back the encoder-side design ogfile4224_s3_v1 (also after J19)"),
+    "J19": ("libJit_s3_J19.so", "3051e554f93c06d5d5aee1b925abfa49ccbb216f63bf5352e5e6ba7090d52f88", "apply the encoder-side design ogfile4224nm_s3_v1 (205 + 4 sites, without the MP4 header size)"),
+    "R19": ("libJit_s3_R19.so", "17197cedf05051117eea2d79cc49f7e448cd443a2a0b0dd5feadaef5390917de", "apply the encoder-side design ogfile4224r300_s3_v1 (238 + 13 sites: as K19, the 100M record settings at 300 Mbps)"),
+    "R20": ("libJit_s3_R20.so", "c106af2a44deaf5e290d6003d8a5178bc2edd0ed0b59fd0e698ef645ccca91b3", "put back the encoder-side design ogfile4224r300_s3_v1"),
 }
 PINS.update({k: v[:2] for k, v in WRITE_STEPS.items()})
-LEVELS.update({k: {"L": 200, "S": 300, "C": 400, "N": 500}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
+LEVELS.update({k: {"L": 200, "S": 300, "C": 400, "N": 500, "H": 600, "D": 700, "K": 800, "J": 900, "R": 1000}[k[0]] + int(k[1:]) for k in WRITE_STEPS})
 WHICH = "check"
+FIT_4224 = [4240, 2816, 8, 0, 4224, 2816, 0, 0, 0, 0]   # the second scaler's block in the 4224x2816 state (build/build_og_s3_native.py, the firmware's own fit)
 
 
 def write_result(data):
@@ -291,7 +306,8 @@ def decode_pages(pages):
         st["division_units_0x1400888"] = [{"in_start": struct.unpack_from("<I", dv, k * 0x150 + 0xC)[0], "in_width": struct.unpack_from("<I", dv, k * 0x150 + 0x10)[0],
                                            "out_width": struct.unpack_from("<I", dv, k * 0x150 + 0x20)[0]} for k in range(4)]
     seen = {}
-    pairs = {(4240, 2832), (4240, 2392), (4240, 2385), (4240, 2848), (4240, 2408), (3840, 2560), (3840, 2160), (1920, 1080), (2144, 2392), (2096, 2392), (2176, 2408)}
+    pairs = {(4240, 2832), (4240, 2392), (4240, 2385), (4240, 2848), (4240, 2408), (3840, 2560), (3840, 2160), (1920, 1080), (2144, 2392), (2096, 2392), (2176, 2408),
+             (4224, 2816), (4240, 2816), (4264, 2832), (2144, 2816), (2096, 2816), (2176, 2832), (2128, 2832)}      # the 4224x2816 state
     for addr, (name, blob) in sorted(pages.items()):
         if name not in ("context", "resizework", "resizestate"):
             continue
@@ -441,7 +457,9 @@ def report(session, facts, which):
         for ln in lines:
             session.say(ln)
         return
-    lines = ["A7S III 5.01 %s, %s" % (which, time.strftime("%Y-%m-%d %H:%M:%S")), f["header"], f["verdict"],
+    note = state_4224_note(f)
+    lines = ["A7S III 5.01 %s, %s" % (which, time.strftime("%Y-%m-%d %H:%M:%S")), f["header"], f["verdict"]] + ([note] if note else []) + [
+
              "identity: %d same, %d differ" % (f["identity_same"], f["identity_differs"]),
              "kernel: %s" % f["kernel_version"], "command line: %s" % f["kernel_command_line"]]
     for s in f["coprocessor_sites"]:
@@ -470,6 +488,9 @@ def report(session, facts, which):
             b = ss.get("second_scaler_block_0x140043c")
             if b:
                 lines.append("  block: words %s -> takes %s x %s from %s" % (b["words"], b["size"][0], b["size"][1], b["start"]))
+                if b["words"][:2] == [4240, 2816]:       # the 4224x2816 state's front end (ogh2816_s3_v1)
+                    lines.append("    the 4224x2816 state as designed: words %s = 4224 x 2816 from (8, 0), scale 1: %s"
+                                 % (FIT_4224, "EQUAL" if b["words"] == FIT_4224 else "NOT equal"))
             if "second_scaler_input_0x1400478" in ss:
                 lines.append("  input words: %s" % ss["second_scaler_input_0x1400478"])
             rw = ss.get("resize_work_0x11b5c40")
@@ -499,6 +520,16 @@ def report(session, facts, which):
         session.say(ln)
 
 
+def state_4224_note(f):
+    """One line when a check or dump was taken with the 4224x2816 state applied. This helper knows the 3840x2560 state's bytes only, so its
+    verdict then reads NOT READY; the output-size word is the one place where it shows the other state's value."""
+    oz = next((s for s in f.get("coprocessor_sites", []) if s["name"] == "outsize"), None)
+    if not oz or oz.get("shown") != struct.pack("<HH", 4224, 2816).hex():
+        return None
+    return ("NOTE: the output size word holds 4224 x 2816: the 4224x2816 state is applied. This helper compares with the 3840x2560 state, so NOT READY is "
+            "what it says here; each step of the apply checked its own bytes.")
+
+
 def last_saved_sha():
     """The SHA-256 of the result the newest saved session of this kit fetched, or None."""
     root = c.PRIVATE_ROOT
@@ -521,7 +552,7 @@ def main():
     ap.add_argument("--remove-only", action="store_true")
     ap.add_argument("--clear-result", metavar="SHA256", help="first delete the result file of an earlier run from the RAM disk, only if its SHA-256 is this")
     ap.add_argument("--firmware-shown")
-    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, C19, C20): it changes the running camera's memory")
+    ap.add_argument("--writes-memory", action="store_true", help="needed for a write step (L5, L6, L16, L17, L19, L20, N19, S16, S17, C19, C20, and the 4224x2816 state's H, D, K, J, R steps): it changes the running camera's memory")
     a = ap.parse_args()
     if a.which in WRITE_STEPS and a.go and not (a.dry_run or a.selftest) and not a.writes_memory:
         raise SystemExit("%s is a write step: %s. It needs --writes-memory as well. Use s3_apply.py. Nothing was sent." % (a.which, WRITE_STEPS[a.which][2]))

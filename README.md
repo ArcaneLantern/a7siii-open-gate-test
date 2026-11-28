@@ -4,6 +4,14 @@
 
 This kit ports the A7 IV open-gate patch (a7iv-open-gate-test) to the Sony A7S III (ILCE-7SM3): a true 3840 × 2560 (3:2) recording in XAVC HS 4K and XAVC S 4K at 23.98p, set in the camera's memory only. A battery pull removes it.
 
+**New (2026-11-28), NOT RUN ON A CAMERA YET: a 4224 × 2816 state, the sensor pixel for pixel.** The A7S III's sensor gives 4240 × 2832. The default state above squeezes those rows into 2,392 and makes a 3840 × 2560 file from them. The new state keeps the pixels: the file is the central **4224 × 2816** of the sensor at scale 1 (8 columns and 8 rows are left out at each edge), in XAVC HS 4K and XAVC S 4K at 23.98p.
+
+- **Why not 4240 × 2832:** the camera's second scaler works in two units, and each needs a width that is a multiple of 32. Its own planning code refuses a 4240-wide picture with one, two and four units; 4224 is the widest it takes from this sensor. With 2,832 rows the picture could not be cut at scale exactly 1 either; with 2,816 it can.
+- **What is new in it:** the output planes grow (step `D16`, the memory step that runs on the FX6), the first scaler passes the picture one to one (`H5`), the output size is 4224 × 2816 (`K16`), and the encoder runs it on both of its cores with Level 6 (`K19`). The sensor's own settings are those of the default state, which records on a camera.
+- **Two ways to test, smallest first:** `open_gate_test_real_rows` applies only the new first-scaler step with the proven 3840 × 2560 output: the file is 3840 × 2560 as before, made from 4224 × 2816 real pixels. `open_gate_apply_4224x2816` is the whole state. `..._300mbps` records the 100M settings at 300 Mbps (V60 / V90 or CFexpress card); `..._no_meta` leaves the MP4 headers at 3840 × 2160.
+- **What to send back:** whether it records and stops by itself, the clip or MediaInfo's text, the live view, and `camera_private`. If some frames show a band of wrong rows (about 300, top or bottom), say so, and say whether going to stills and back to movie clears it.
+- The three states share memory sites. Put one back, or pull the battery for 10 seconds, before applying another; a step that meets another state's bytes writes nothing and says so.
+
 **MP4 headers (L19 v2, matching the A7 IV and ZV-E1): no remux needed.** The encoder step `L19` (`ogfile2560_hs_s_s3_v2`) now also sets the height in the MP4 headers (`tkhd`, the `stsd` sample entry `avc1`/`hvc1`, and Sony's `PROF` box) to `2560`, so editors open clips at 3:2 straight off the card while preserving Sony gyro metadata without an `ffmpeg` remux. Sony's own XML (`M01.XML` beside the clip and the XML inside it) still says 3840 × 2160, 16:9. `--no-meta` (`N19`, or the `open_gate_apply_no_meta` launcher) uses `ogfile2560_hs_s_s3_v1` to keep 3840 × 2160 headers. `L20` puts back either `v2` or `v1`.
 
 **Preflight (`s3read_v9`) and warm power-switch gating (Issue #3):** The read-only check and dump now inspect both MP4 header instructions (`0x223cc4` and `0x223d10` in `libmpr.so`) alongside all 25 coprocessor sites, 4 `L1-comb` sites, and 101 `av-cam.bin` sites. `VERDICT READY (stock preflight)` requires pure stock state (with the existing runtime-filled exception for `stored_record`, `outsize`, and `outsize_guard*`); a coherent applied closing `dump` (with or without `--no-meta` and with runtime `stored_record`) reports `VERDICT READY (open gate applied)`. Mixed or partial states—including a warm power-switch state where coprocessor sites reset to stock while `av-cam.bin` / `libmpr.so` stay applied (Issue #3), a single MP4 header site applied, or partial coprocessor sites—report `VERDICT NOT READY`. Always pull the battery for 10 seconds to return fully to stock; `s3_apply.py` requires an `s3read_v9` check. Offline C and Python regression tests run with `python -m unittest discover -s tests -v`.
@@ -38,6 +46,11 @@ How it got here:
 | `open_gate_apply.cmd` | Applies the default state in five steps: open gate (with 3840 × 2560 MP4 headers), the screen at 3:2, the C3 preview. Ends with one read-only session | **Yes: memory only** |
 | `open_gate_apply_no_meta.cmd` | Applies open gate without the MP4 header height (`N19`, headers stay 3840 × 2160), plus the screen at 3:2 and C3 preview | **Yes: memory only** |
 | `open_gate_apply_no_screen.cmd` | Only the three open-gate steps (with 3840 × 2560 MP4 headers; accepts `--no-meta`) | **Yes: memory only** |
+| `open_gate_test_real_rows.cmd` | **New, not run.** The new sensor step (`H5`) with the default output size and encoder steps: a 3840 × 2560 file from 4224 × 2816 real pixels, plus the screen steps | **Yes: memory only** |
+| `open_gate_apply_4224x2816.cmd` | **New, not run.** The 4224 × 2816 state in six steps: output planes, sensor side, output size, encoder side (MP4 headers 4224 × 2816), the screen at 3:2, the C3 preview | **Yes: memory only** |
+| `open_gate_apply_4224x2816_300mbps.cmd` | The same with the 100M record settings at 300 Mbps (`R19`) | **Yes: memory only** |
+| `open_gate_apply_4224x2816_no_meta.cmd` | The same as the second, MP4 headers left at 3840 × 2160 (`J19`) | **Yes: memory only** |
+| `open_gate_putback_4224x2816.cmd`, `..._300mbps.cmd`, `open_gate_test_real_rows_putback.cmd` | Put the matching state back | Yes: memory only |
 | `open_gate_putback.cmd` | Puts the five steps back (puts back either `L19` v2 or `N19` `--no-meta`) | Yes: memory only |
 | `screen_putback.cmd` | Puts the two screen steps back | Yes: memory only |
 
@@ -78,6 +91,8 @@ If macOS refuses to open a .command file ("unidentified developer" or "could not
 5. When the log says **unplug and plug in again**, do that with the phone cable. Never switch the camera off.
 6. **Stop waiting** ends a wait for the camera. It never interrupts a step that is talking to the camera.
 7. Afterwards, **Export logs** writes a zip to `Download/A7SIII-OpenGate/` on the phone: send that zip back.
+
+**App 0.3 (2026-11-28):** a list under the two boxes chooses the state that **2. Apply to camera**, **Put back** and **Dry run** work on: 3840 × 2560 (the default), 4224 × 2816, 4224 × 2816 at 300 Mbps, or the real-rows test. The three new ones have not run on a camera. Use **Put back** with the same choice the apply was made with.
 
 **Self-test** and **Dry run** need no camera and send nothing.
 

@@ -247,3 +247,38 @@ A second look at the firmware for the live-view fault ruled out two suspects: th
 
 **The live-view fault, corrected description.** It is not a first-entry fault. The live view is glitchy, purple with the lower part black, on every entry into movie mode from stills. That includes the entry after the last apply session, because that session began with the dial on stills. It is right after a start of the picture in movie mode and after a record start, until the next visit to stills. The look is the one sensor step v2 gave, where the sensor delivered its 16:9 band into a full-height pipeline. Our reading, not shown: on a live switch from the stills live view the sensor does not take up the full-height mode, which the stock firmware only enters through its capture sequence. There is no other fast full-width, full-height sensor mode to use instead.
 
+## The 4224 × 2816 state (2026-11-28): built and emulated, not run on a camera
+
+Asked for: the sensor's whole 4240 × 2832 picture in the file, as the A7 IV kit's real 5760 × 3840.
+
+**What decides the size.**
+- The second scaler's division job (`cpapp-b.bin` `0x444a74`, run alone on constructed requests) accepts two-unit output widths in multiples of 64 only: from a 4240 × 2832 picture it takes 3840 … 4224, 4288; it refuses 4240 with one, two and four units. Heights 2784 to 2832 all pass at 4224 wide.
+- The resize fit cuts a 16:9 shape, measured with the stored record's sampling ratio, out of the first stage's reference window (header window 3 of the picture records). The firmware's own calculation returns both blocks read from the tester's camera word for word (second write test: 3580.7 columns from 329.6; v2 to v5: 4240 × 2391.9 from 0, 0.04). With a reference window of 4240 × 2816 and the ratio 27/32 it returns `4240 2816 8 0 4224 2816 0 0 0 0`: exactly 4224 × 2816 from column 8, scale 1 both ways. With 2,832 rows no ratio of two bytes gives a whole number of columns.
+- So: first stage 2,832 rows from active row 8 (2,816 active), first scaler one to one, second scaler takes the central 4224 columns, file 4224 × 2816.
+
+**The steps.**
+
+| Step | Design | What it changes |
+|---|---|---|
+| `D16` / `D17` | `dmm7slot_s3_v1` | ten words of the run-time copy of `DmmCfg.bin`: seven planes of the 4K layout `0x2b` 13,271,040 → 14,942,208 bytes, the eighth out of the pool, the HD layout `0x29`'s one 4K plane enlarged too. The A7S III fills a plane at 1.25 bytes per pixel: 4224 × 2816 needs 14,868,480. The same ten words with 14,745,600 run on the FX6 (fx6-open-gate-test issue 2, Mininoob's design) |
+| `H5` / `H6` | `ogh2816_s3_v1` | the sensor cells of `ogsq_s3_v5`, unchanged; the two picture records with a first stage of 2,832 rows from active row 8 and the first scaler at step 4096 both ways (front end 4240 × 2816; v5: 4240 × 2392); stored record ratio 27/32 (v5: 16/19) |
+| `K16` / `K17` | `outsz4224_s3_v1` | the output-size word `0x13ec2e4`: 3840 × 2160 → 4224 × 2816 |
+| `K19` / `K20` | `ogfile4224_s3_v1` | encoder request, both encoder cores (rows for the first core 1,408), the 4K memory blocks in the order CD `0x477`, LD `0x486`, multi `0x474`, ES `0x47a`, Level 6, and nine `libmpr.so` instructions so that `tkhd`, `stsd` and `PROF` say 4224 × 2816 |
+| `J19` | `ogfile4224nm_s3_v1` | the same without the nine header instructions (`K20` puts it back) |
+| `R19` / `R20` | `ogfile4224r300_s3_v1` | as `K19`, and the profiles of the 100M settings hold Sony's own 300 / 340 Mbps figures and Level 6.1 |
+
+**Checked offline.**
+- Records: the generator rebuilds `ogsq_s3_v5`'s two records byte for byte by the same path, rebuilds the stock FF 4K pair from its own geometry, and the new pair breaks none of the rules that hold on every stock split pair of eight camera builds.
+- Memory: in the A7S III's own allocator the changed table behaves as the FX6's did: after a full release one refused request, then 14 planes of 14,942,208; never a plane of the old size.
+- Encoder: 30 checks in the A7S III's own `av-cam.bin` and `libmpr.so`: all 29 descriptors answer a 4224 × 2816 request and no other request changes its answer; the codec firmware's own calculation needs 47.6 MB of reference pictures and 13.9 MB of work space; every start block is accepted; the MP4 track config, `stsd` entry and `PROF` entry are built at 4224 × 2816 for every request the stock writer accepts.
+- Libraries: 60 cases on a model camera (apply, apply again, put back, each guard wrong, lost writes, and each library on a camera that holds the 3840 × 2560 state: nothing written).
+
+**Not known before a camera says.**
+- Whether the stages after the first scaler take 2,816 rows at 24p on this body (stock 2,392; the A7 IV went from 2,438 to 3,840).
+- A first stage that starts 8 rows into the frame on this body (v5 starts at row 0; the A7 IV ran such stages).
+- Whether planes opened before `D16` stay in use. On one FX6 half the frames had a band of wrong rows, which fits planes of the old size still in the ring. The apply runs with the dial on stills for that reason.
+- Both encoder cores at this size on this body, in-camera playback, heat, long takes.
+- 25p, 30p and above: not set up. 60p crashes the camera in every open-gate state so far.
+
+**The real-rows test** (`realrows`: `H5`, `L16`, `L19`) puts the new sensor side into the proven 3840 × 2560 file: the second scaler takes the same 4224 × 2816 and reduces it 1.1 times both ways. Only `H5` is new in it, so a failure there points at the records and not at the planes or the encoder.
+
